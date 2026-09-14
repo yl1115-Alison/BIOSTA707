@@ -1,0 +1,19 @@
+---
+title: "BIOSTAT 707 Checkpoint 1"
+author: "Alison Liu"
+format:
+  html:
+    toc: true
+    embed-resources: true
+engine: knitr
+---
+
+## Setup
+
+```{r}
+print("Checkpoint 1 setup works.")
+```
+
+## Introduction
+
+This report characterizes the PhysioNet Challenge 2012 Set A cohort.

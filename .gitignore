@@ -1,0 +1,23 @@
+# Raw data
+data/
+
+# Generated outputs
+output/*
+!output/checkpoint1.html
+
+# Pixi environment
+.pixi/
+
+# Quarto temporary files
+.quarto/
+checkpoint1_files/
+
+# R temporary files
+.Rhistory
+.RData
+.Ruserdata
+
+# macOS
+.DS_Store
+/.quarto/
+**/*.quarto_ipynb

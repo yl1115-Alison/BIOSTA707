@@ -1,0 +1,21 @@
+[workspace]
+name = "biostat707-checkpoint1"
+channels = ["conda-forge"]
+platforms = ["osx-arm64", "linux-64"]
+
+[dependencies]
+r-base = ">=4.4,<4.7"
+quarto = ">=1.7"
+r-knitr = "*"
+r-rmarkdown = "*"
+r-readr = "*"
+r-dplyr = "*"
+r-tidyr = "*"
+r-ggplot2 = "*"
+r-gtsummary = "*"
+r-naniar = "*"
+r-visdat = "*"
+r-here = "*"
+
+[tasks]
+checkpoint1 = "quarto render checkpoint1.qmd --output-dir output"
