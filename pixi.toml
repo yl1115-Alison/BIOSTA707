@@ -18,4 +18,16 @@ r-visdat = "*"
 r-here = "*"
 
 [tasks]
-checkpoint1 = "quarto render checkpoint1.qmd --output-dir output"
+build-long = "Rscript R/01_build_long.R"
+
+explore-long = "Rscript R/02_explore_long.R"
+
+build-wide = "Rscript R/03_build_wide.R"
+
+cohort-eda = "Rscript R/04_cohort_eda.R"
+
+build-all = "Rscript R/01_build_long.R && Rscript R/02_explore_long.R && Rscript R/03_build_wide.R && Rscript R/04_cohort_eda.R"
+
+render = "quarto render checkpoint1.qmd"
+
+checkpoint1 = "Rscript R/01_build_long.R && Rscript R/02_explore_long.R && Rscript R/03_build_wide.R && Rscript R/04_cohort_eda.R && quarto render checkpoint1.qmd"

@@ -1,9 +1,8 @@
 # Raw data
 data/
 
-# Generated outputs
+# Generated analysis outputs
 output/*
-!output/checkpoint1.html
 
 # Pixi environment
 .pixi/
@@ -19,5 +18,7 @@ checkpoint1_files/
 
 # macOS
 .DS_Store
+
+# Quarto/Jupyter temporary files
 /.quarto/
 **/*.quarto_ipynb

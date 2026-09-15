@@ -5,15 +5,509 @@ format:
   html:
     toc: true
     embed-resources: true
-engine: knitr
+    code-fold: true
+    code-summary: "Show code"
+execute:
+  echo: false
+  warning: false
+  message: false
 ---
 
-## Setup
-
 ```{r}
-print("Checkpoint 1 setup works.")
+#| label: setup
+
+library(readr)
+library(dplyr)
+library(knitr)
+library(here)
+
+long_raw <- read_csv(
+  here("output", "set-a_long.csv"),
+  show_col_types = FALSE
+)
+
+long_clean <- read_csv(
+  here("output", "set-a_long_clean.csv"),
+  show_col_types = FALSE
+)
+
+wide <- read_csv(
+  here("output", "set-a_wide.csv"),
+  show_col_types = FALSE
+)
+
+table1 <- read_csv(
+  here("output", "table1.csv"),
+  show_col_types = FALSE
+)
+
+outcome_summary <- read_csv(
+  here("output", "outcome_summary.csv"),
+  show_col_types = FALSE
+)
+
+presence_summary <- read_csv(
+  here("output", "wide_presence_summary.csv"),
+  show_col_types = FALSE
+)
+
+informative_presence <- read_csv(
+  here("output", "informative_presence.csv"),
+  show_col_types = FALSE
+)
+
+value_summary <- read_csv(
+  here("output", "long_value_summary.csv"),
+  show_col_types = FALSE
+)
+
+stopifnot(
+  nrow(long_raw) == 1757980,
+  n_distinct(long_raw$RecordID) == 4000,
+  nrow(wide) == 4000,
+  n_distinct(wide$RecordID) == 4000
+)
 ```
 
-## Introduction
+## Overview
 
-This report characterizes the PhysioNet Challenge 2012 Set A cohort.
+This checkpoint characterizes the cohort in PhysioNet Challenge 2012 Set A. The data contain 4,000 ICU stays with clinical measurements recorded during the first 48 hours after ICU admission. My goals were to combine the patient-level files into a usable long-format data set, examine data quality and missingness, construct an admission-level wide table, and summarize the cohort and outcomes.
+
+The analysis at this checkpoint is descriptive. I have not developed a mortality prediction model yet, so the Challenge 2012 prediction criteria are discussed conceptually rather than evaluated.
+
+## Data Wrangling
+
+The original Set A data consist of 4,000 separate patient files in skinny or long format. I combined these files into `output/set-a_long.csv`, adding the corresponding `RecordID` to every observation before stacking the files.
+
+The resulting long table contains **`r format(nrow(long_raw), big.mark = ",")` rows**, **`r n_distinct(long_raw$RecordID)` ICU stays**, and **`r n_distinct(long_raw$Parameter)` parameters**.
+
+In this representation, each row corresponds to one recorded parameter at one time for one ICU stay. An important consequence is that if a variable was never measured, there may be no row for that variable rather than an explicit `NA` value.
+
+## Data Quality and Cleaning
+
+I first examined the distributions of the observed values rather than automatically treating all unusual values as errors.
+
+The raw data contained explicit `-1` values for:
+
+- Height: 1,894 observations
+- Weight: 326 observations
+- Gender: 3 observations
+
+I treated these values as missing in the analysis representation.
+
+Initial exploration also identified a small number of measurements that were clearly incompatible with the scale or meaning of the corresponding variable. Examples included pH values such as 94, 100, and 734; temperatures such as -17.8 and 0; heights such as 1.8 and values above 350; zero heart rates; and zero or negative blood pressures.
+
+I used a conservative cleaning strategy. I retained the original `Value` column and created a separate `Value_clean` column. The following values were converted to missing:
+
+- pH outside 0--14;
+- temperature outside 30--45 degrees C;
+- height outside 100--250 cm;
+- heart rate equal to zero; and
+- nonpositive invasive or noninvasive blood-pressure measurements.
+
+I did not attempt to guess corrections. For example, although a pH value of 734 could plausibly represent 7.34, I did not divide it by 100 without documentation supporting that transformation.
+
+Similarly, extreme values that were not unambiguously invalid were retained. For example, an HR of 300 and very high respiratory rates were not automatically removed.
+
+After applying these rules, the post-cleaning validation checks found zero remaining violations of the selected constraints.
+
+```{r}
+#| label: cleaning-table
+
+cleaning_display <- value_summary |>
+  filter(n_missing_after_cleaning > 0) |>
+  select(
+    Parameter,
+    n_rows,
+    n_missing_after_cleaning,
+    proportion_missing_after_cleaning,
+    min,
+    max
+  ) |>
+  mutate(
+    proportion_missing_after_cleaning =
+      scales::percent(
+        proportion_missing_after_cleaning,
+        accuracy = 0.1
+      )
+  )
+
+kable(
+  cleaning_display,
+  caption =
+    "Variables with observations converted to missing during cleaning"
+)
+```
+
+## Cohort Characteristics
+
+The cohort contained 4,000 ICU stays. There were 3,446 survivors and 554 patients who died in the hospital.
+
+Table 1 summarizes baseline characteristics overall and according to in-hospital mortality status.
+
+Nonsurvivors were older on average than survivors (70.0 versus 63.3 years). The proportion of male patients was similar in the two groups (54.2% among nonsurvivors and 56.5% among survivors). First recorded weight was somewhat lower among nonsurvivors (78.6 versus 82.0).
+
+ICU type also differed descriptively between the groups. Medical ICU admissions represented 49.6% of nonsurvivors compared with 35.0% of survivors. In contrast, Cardiac Surgery Recovery Unit admissions represented 7.8% of nonsurvivors compared with 24.1% of survivors.
+
+These comparisons are descriptive and should not be interpreted as causal effects of ICU type or other characteristics.
+
+```{r}
+#| label: table1
+
+kable(
+  table1,
+  align = c("l", "c", "c", "c"),
+  caption =
+    "Table 1. Characteristics of Challenge 2012 Set A ICU stays"
+)
+```
+
+## Outcome Summary
+
+There were 554 in-hospital deaths among the 4,000 ICU stays, corresponding to an in-hospital mortality rate of **13.9%**.
+
+Median SAPS-I was 15.0 (IQR 11.0--18.0), median SOFA was 6.0 (IQR 3.0--9.0), and median length of stay was 10.0 days (IQR 6.0--17.0).
+
+```{r}
+#| label: outcome-table
+
+kable(
+  outcome_summary,
+  caption = "Outcome summary"
+)
+```
+
+```{r}
+#| label: mortality-plot
+#| fig-cap: "In-hospital mortality in Challenge 2012 Set A."
+
+knitr::include_graphics(
+  here("output", "outcome_mortality.png")
+)
+```
+
+## Missingness in the Long-Format Data
+
+### Measurement Presence Across Variables
+
+For long-format EHR data, simply counting explicit missing values is not sufficient. If a test was never performed, the corresponding row may not exist.
+
+I therefore examined **measurement presence**, defined as whether an ICU stay had at least one valid observation of a variable during the first 48 hours.
+
+Measurement coverage differed substantially across variables. For example:
+
+- TroponinI was measured in 205 of 4,000 stays (5.1%);
+- Cholesterol in 305 stays (7.6%);
+- TroponinT in 863 stays (21.6%);
+- RespRate in 1,101 stays (27.5%);
+- Albumin in 1,615 stays (40.4%);
+- Lactate in 2,183 stays (54.6%);
+- FiO2 in 2,717 stays (67.9%);
+- pH in 3,038 stays (76.0%).
+
+In contrast, many routine laboratory and vital-sign measurements were available for nearly all ICU stays.
+
+This shows that missingness is strongly related to the measurement process: different clinical variables have very different opportunities to be observed.
+
+```{r}
+#| label: presence-table
+
+presence_display <- presence_summary |>
+  mutate(
+    proportion_measured =
+      scales::percent(
+        proportion_measured,
+        accuracy = 0.1
+      ),
+
+    proportion_not_measured =
+      scales::percent(
+        proportion_not_measured,
+        accuracy = 0.1
+      )
+  )
+
+kable(
+  presence_display,
+  caption =
+    "Presence of longitudinal variables during the 48-hour observation window"
+)
+```
+
+```{r}
+#| label: presence-plot
+#| fig-cap: "Proportion of ICU stays with at least one valid measurement of each variable."
+
+knitr::include_graphics(
+  here("output", "presence_by_parameter.png")
+)
+```
+
+### Time-Dependent Presence
+
+Measurement presence also changes over time after admission.
+
+To examine this, I divided the 48-hour observation period into 4-hour intervals. For each parameter and interval, I calculated the proportion of the 4,000 ICU stays that had at least one valid measurement in that interval.
+
+This preserves temporal information that would disappear if missingness were summarized only once per admission. Routine monitoring, clinical deterioration, diagnostic suspicion, and other aspects of care can all affect when measurements are collected.
+
+```{r}
+#| label: temporal-presence
+#| fig-cap: "Measurement presence over the first 48 hours for selected clinical variables. Each point represents the proportion of ICU stays with at least one measurement in a 4-hour interval."
+
+knitr::include_graphics(
+  here(
+    "output",
+    "measurement_rate_over_time.png"
+  )
+)
+```
+
+The lasagna plot provides a patient-level view of the same issue. Each row represents one ICU stay and each column represents a 4-hour interval. A filled cell indicates that Glucose was measured at least once during that interval.
+
+The plot demonstrates heterogeneity both between patients and over time within the same admission.
+
+```{r}
+#| label: lasagna-plot
+#| fig-cap: "Glucose measurement presence by ICU stay and 4-hour interval."
+
+knitr::include_graphics(
+  here(
+    "output",
+    "lasagna_presence.png"
+  )
+)
+```
+
+## Construction of the Wide Table
+
+I next converted the cleaned long-format data into a one-row-per-admission representation.
+
+The final `output/set-a_wide.csv` contains **4,000 rows and 232 columns** after joining the Challenge outcomes.
+
+Age, Gender, Height, and ICUType were retained as admission-level variables. Weight and the other longitudinal variables were summarized over the 48-hour observation period.
+
+For each longitudinal variable, I calculated:
+
+- number of valid measurements (`count`);
+- first valid value;
+- last valid value;
+- minimum;
+- maximum; and
+- mean.
+
+For example, if Lactate was never measured for an admission, `Lactate_count` is 0 while `Lactate_first`, `Lactate_last`, `Lactate_min`, `Lactate_max`, and `Lactate_mean` remain missing.
+
+I used zero rather than missing for the count because "zero measurements" is known information rather than an unknown value.
+
+For Checkpoint 1, I used one set of summaries over the complete 48-hour period rather than separate summaries for hours 0--24 and 24--48. This provides a relatively simple admission-level representation. I retained the separate temporal-presence analysis above because the 48-hour summaries themselves do not preserve detailed measurement timing.
+
+This design decision can be revisited for later predictive modeling.
+
+## Missingness in the Wide Table
+
+The following map shows whether each longitudinal variable was measured at least once for each ICU stay.
+
+This representation avoids displaying five or six nearly identical missingness columns for the `first`, `last`, `min`, `max`, and `mean` summaries of the same underlying measurement.
+
+```{r}
+#| label: wide-presence-map
+#| fig-cap: "Measurement presence across ICU stays in the wide representation."
+
+knitr::include_graphics(
+  here(
+    "output",
+    "wide_presence_map.png"
+  )
+)
+```
+
+The wide representation makes an important distinction between the value of a measurement and the process that generated it.
+
+For example, `Lactate_mean` summarizes the observed lactate values, while `Lactate_count` describes how frequently lactate was measured. These may contain different information.
+
+## Informative Presence
+
+I also examined whether measurement presence itself was associated with in-hospital mortality.
+
+For each longitudinal variable, I compared mortality among admissions in which the variable was measured at least once with mortality among admissions in which the variable was never measured.
+
+This is a descriptive analysis of the measurement process, not a causal analysis.
+
+Several variables showed substantial differences.
+
+For **TroponinI**, mortality was:
+
+$begin:math:display$
+27\.8\\\%
+$end:math:display$
+
+when TroponinI was measured, compared with:
+
+$begin:math:display$
+13\.1\\\%
+$end:math:display$
+
+when it was not measured. The difference was approximately **14.7 percentage points**.
+
+For **TroponinT**, mortality was 21.1% when measured versus 11.9% when not measured, a difference of approximately **9.2 percentage points**.
+
+For **Lactate**, mortality was 17.6% when measured versus 9.3% when not measured, a difference of approximately **8.3 percentage points**.
+
+The direction was not always positive. RespRate was measured in 1,101 admissions, and mortality was 7.9% when it was measured compared with 16.1% when it was not measured, corresponding to a difference of approximately **-8.2 percentage points**.
+
+These results illustrate the concept of **informative presence**. Clinical measurements are not necessarily obtained uniformly across patients. Whether a measurement occurs may depend on patient condition, suspected pathology, monitoring modality, ICU workflow, or other clinical factors.
+
+Therefore, measurement presence and measurement frequency may themselves contain information relevant to outcomes.
+
+These descriptive comparisons do **not** establish that ordering a test changes mortality. They also do not by themselves prove that the missing-data mechanism is MCAR, MAR, or MNAR.
+
+```{r}
+#| label: informative-presence-table
+
+informative_display <- informative_presence |>
+  filter(
+    n_measured >= 20,
+    n_not_measured >= 20,
+    !is.na(mortality_difference)
+  ) |>
+  slice_max(
+    abs(mortality_difference),
+    n = 15,
+    with_ties = FALSE
+  ) |>
+  mutate(
+    mortality_if_measured =
+      scales::percent(
+        mortality_if_measured,
+        accuracy = 0.1
+      ),
+
+    mortality_if_not_measured =
+      scales::percent(
+        mortality_if_not_measured,
+        accuracy = 0.1
+      ),
+
+    mortality_difference =
+      scales::percent(
+        mortality_difference,
+        accuracy = 0.1
+      )
+  )
+
+kable(
+  informative_display,
+  caption =
+    "Largest descriptive mortality differences according to measurement presence"
+)
+```
+
+```{r}
+#| label: informative-presence-plot
+#| fig-cap: "Difference in in-hospital mortality between admissions with and without each measurement."
+
+knitr::include_graphics(
+  here(
+    "output",
+    "informative_presence.png"
+  )
+)
+```
+
+## Challenge 2012 Assessment Criteria
+
+No predictive model is evaluated at Checkpoint 1, but I reviewed the two Challenge assessment concepts that will be relevant later.
+
+One criterion is:
+
+$$
+\min\left(
+\frac{TP}{TP+FN},
+\frac{TP}{TP+FP}
+\right).
+$$
+
+The first term,
+
+$$
+\frac{TP}{TP+FN},
+$$
+
+is sensitivity or recall.
+
+The second,
+
+$$
+\frac{TP}{TP+FP},
+$$
+
+is positive predictive value or precision.
+
+Taking the minimum of these two values penalizes a classifier that performs well on one measure while performing poorly on the other. Therefore, a useful classifier needs to maintain both reasonable sensitivity and reasonable positive predictive value.
+
+The second assessment concept is the **Hosmer--Lemeshow statistic**, which concerns calibration. It compares observed event frequencies with predicted event probabilities across groups of predicted risk.
+
+Thus, future modeling will need to consider not only classification performance but also whether predicted mortality probabilities agree with observed mortality rates.
+
+No model is evaluated using either criterion in this checkpoint.
+
+## Use of AI Tools
+
+I used **ChatGPT (GPT-5.6 Sol)** during this checkpoint as a learning and coding aid.
+
+I used it to help me understand concepts including long versus wide EHR representations, measurement presence, time-dependent presence, and informative presence. I also used it for assistance with R data-wrangling syntax, Git and Pixi workflow, debugging error messages, drafting portions of the analysis code, and organizing this report.
+
+The main benefit was faster iteration while learning unfamiliar programming and data-management tasks. It was particularly useful for explaining error messages and suggesting ways to structure intermediate validation checks.
+
+The main limitation is that AI-generated code or statistical suggestions can be incorrect, unnecessarily complicated, or based on assumptions that are not supported by the actual data. Suggested clinical cleaning rules also require particular caution because an unusual measurement is not automatically an erroneous measurement.
+
+I therefore reviewed and tested the generated code rather than accepting it directly. I ran the workflow in separate stages and inspected intermediate outputs.
+
+Specific checks included:
+
+- verifying that all 4,000 Set A files were read;
+- confirming 1,757,980 rows and 4,000 unique `RecordID`s in the long table;
+- checking that observed times were within the 0--48 hour window;
+- examining suspicious raw measurements before defining cleaning rules;
+- retaining the original `Value` alongside `Value_clean`;
+- confirming zero post-cleaning validation violations;
+- confirming that the wide table contained exactly 4,000 unique ICU stays;
+- verifying that the outcome join did not add or remove admissions; and
+- rerunning the complete pipeline from the raw Set A files after reorganizing the project directory.
+
+I used ChatGPT through my existing ChatGPT access. I did not separately track API token usage and did not incur a separate per-token API charge for this assignment.
+
+## Reproducibility
+
+The analysis is organized as four sequential R scripts:
+
+1. `R/01_build_long.R` combines the 4,000 Set A patient files into `output/set-a_long.csv`.
+2. `R/02_explore_long.R` performs data-quality checks, conservative cleaning, and temporal measurement-presence analysis.
+3. `R/03_build_wide.R` creates the one-row-per-admission `output/set-a_wide.csv` table and joins the Challenge outcomes.
+4. `R/04_cohort_eda.R` generates Table 1, the outcome summary, wide-table missingness and presence summaries, and the informative-presence analysis.
+
+The project environment is defined using Pixi in `pixi.toml`, with package versions recorded in `pixi.lock`. The raw PhysioNet data and generated intermediate outputs are excluded from version control, while the analysis code and environment specification are retained so that the outputs can be regenerated.
+
+To reproduce the analysis from the project root, I run the four scripts in order:
+
+```bash
+pixi run Rscript R/01_build_long.R
+pixi run Rscript R/02_explore_long.R
+pixi run Rscript R/03_build_wide.R
+pixi run Rscript R/04_cohort_eda.R
+```
+
+The final Quarto report can then be rendered with:
+
+```bash
+pixi run checkpoint1
+```
+
+## Summary
+
+Challenge 2012 Set A contained 4,000 ICU stays and 1,757,980 long-format observations during the first 48 hours. There were 554 in-hospital deaths, corresponding to a mortality rate of 13.9%. The cohort showed descriptive differences between survivors and nonsurvivors, particularly in age and ICU-type composition.
+
+The EHR measurements also showed substantial heterogeneity in missingness and measurement presence. Some measurements, such as TroponinI and TroponinT, were available for only a minority of admissions, whereas routine measurements were observed in nearly all admissions. Measurement presence varied over time and was associated with mortality for several variables, illustrating that the clinical measurement process itself can contain information.
+
+For this checkpoint, I therefore retained both measurement values and measurement-count information in the wide representation and separately examined temporal presence. These choices provide a reproducible starting point for later mortality modeling while avoiding the assumption that all missing EHR measurements arise from a simple random process.
