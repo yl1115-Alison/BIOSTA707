@@ -495,6 +495,48 @@ write_csv(
   )
 )
 
+# -------------------------------------------------------------------------
+# Wide-table missingness bar plot
+# -------------------------------------------------------------------------
+
+wide_missingness_plot <- ggplot(
+  presence_summary,
+  aes(
+    x = proportion_not_measured,
+    y = reorder(
+      Parameter,
+      proportion_not_measured
+    )
+  )
+) +
+  geom_col() +
+  scale_x_continuous(
+    labels = scales::percent_format(
+      accuracy = 1
+    ),
+    limits = c(0, 1)
+  ) +
+  labs(
+    title = "Missingness in the Wide Table",
+    subtitle =
+      "Percent of ICU stays without any valid measurement during the first 48 hours",
+    x = "% missing",
+    y = "Clinical variable"
+  ) +
+  theme_minimal(
+    base_size = 11
+  )
+
+ggsave(
+  here(
+    "output",
+    "wide_missingness_bar.png"
+  ),
+  wide_missingness_plot,
+  width = 8,
+  height = 9,
+  dpi = 150
+)
 
 # -----------------------------------------------------------------------------
 # 5. Wide-table presence map

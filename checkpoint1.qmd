@@ -263,6 +263,32 @@ knitr::include_graphics(
 )
 ```
 
+The same temporal pattern can be expressed directly in terms of
+missingness. For each clinical variable and each 4-hour interval, I
+calculated the proportion of the 4,000 ICU stays with no valid
+measurement during that interval. Thus, temporal missingness is the
+complement of temporal measurement presence.
+
+```{r}
+#| label: temporal-missingness-heatmap
+#| fig-cap: "Temporal missingness during the first 48 hours. Each cell shows the proportion of ICU stays without a valid measurement of the corresponding variable during a 4-hour interval."
+
+knitr::include_graphics(
+  here(
+    "output",
+    "temporal_missingness_heatmap.png"
+  )
+)
+```
+
+The heatmap shows that missingness differs substantially across both
+clinical variables and time since ICU admission. Some routinely
+monitored variables are observed for a large proportion of admissions
+throughout the 48-hour period, whereas more selectively ordered
+measurements remain missing for most admissions. The temporal variation
+also reinforces that missingness is part of the clinical measurement
+process rather than simply a fixed property of each variable.
+
 The lasagna plot provides a patient-level view of the same issue. Each row represents one ICU stay and each column represents a 4-hour interval. A filled cell indicates that Glucose was measured at least once during that interval.
 
 The plot demonstrates heterogeneity both between patients and over time within the same admission.
@@ -306,9 +332,36 @@ This design decision can be revisited for later predictive modeling.
 
 ## Missingness in the Wide Table
 
-The following map shows whether each longitudinal variable was measured at least once for each ICU stay.
+I first summarized wide-table missingness at the variable level. For
+each longitudinal variable, I calculated the proportion of ICU stays
+with no valid measurement during the complete 48-hour observation
+window.
 
-This representation avoids displaying five or six nearly identical missingness columns for the `first`, `last`, `min`, `max`, and `mean` summaries of the same underlying measurement.
+```{r}
+#| label: wide-missingness-bar
+#| fig-cap: "Percentage of ICU stays with no valid measurement of each longitudinal variable during the first 48 hours."
+
+knitr::include_graphics(
+  here(
+    "output",
+    "wide_missingness_bar.png"
+  )
+)
+```
+
+Missingness varied substantially across variables. TroponinI,
+Cholesterol, and TroponinT were missing for most ICU stays, whereas
+routine measurements were available for a much larger proportion of
+the cohort. This variation is consistent with different clinical
+measurement processes across variables.
+
+The following map provides a complementary patient-level view. It
+shows whether each longitudinal variable was measured at least once
+for each ICU stay.
+
+This representation avoids displaying five or six nearly identical
+missingness columns for the `first`, `last`, `min`, `max`, and `mean`
+summaries of the same underlying measurement.
 
 ```{r}
 #| label: wide-presence-map
@@ -322,9 +375,12 @@ knitr::include_graphics(
 )
 ```
 
-The wide representation makes an important distinction between the value of a measurement and the process that generated it.
+The wide representation makes an important distinction between the
+value of a measurement and the process that generated it.
 
-For example, `Lactate_mean` summarizes the observed lactate values, while `Lactate_count` describes how frequently lactate was measured. These may contain different information.
+For example, `Lactate_mean` summarizes the observed lactate values,
+while `Lactate_count` describes how frequently lactate was measured.
+These may contain different information.
 
 ## Informative Presence
 

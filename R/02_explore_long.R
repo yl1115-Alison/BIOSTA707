@@ -6,6 +6,7 @@ library(dplyr)
 library(tidyr)
 library(ggplot2)
 library(here)
+library(tidyr)
 
 N_STAYS <- 4000
 
@@ -371,6 +372,133 @@ write_csv(
   here("output", "measurement_rate_4h.csv")
 )
 
+# -------------------------------------------------------------------------
+# Temporal missingness heatmap
+# -------------------------------------------------------------------------
+# For each variable and 4-hour interval:
+#
+#   proportion_missing =
+#       proportion of the 4,000 ICU stays with no valid measurement
+#
+# This is the complement of measurement presence.
+
+all_parameters <- long_clean |>
+  filter(
+    Parameter != "RecordID"
+  ) |>
+  distinct(Parameter) |>
+  pull(Parameter)
+
+all_time_bins <- seq(
+  0,
+  44,
+  by = 4
+)
+
+temporal_missingness <- tidyr::expand_grid(
+  Parameter = all_parameters,
+  time_bin_start = all_time_bins
+) |>
+  left_join(
+    measurement_rate,
+    by = c(
+      "Parameter",
+      "time_bin_start"
+    )
+  ) |>
+  mutate(
+    n_records_measured =
+      coalesce(
+        n_records_measured,
+        0L
+      ),
+
+    proportion_measured =
+      n_records_measured / 4000,
+
+    proportion_missing =
+      1 - proportion_measured,
+
+    time_bin =
+      paste0(
+        time_bin_start,
+        "-",
+        time_bin_start + 4
+      )
+  )
+
+write_csv(
+  temporal_missingness,
+  here(
+    "output",
+    "temporal_missingness_4h.csv"
+  )
+)
+
+temporal_missingness_plot <- ggplot(
+  temporal_missingness,
+  aes(
+    x = factor(
+      time_bin,
+      levels = paste0(
+        all_time_bins,
+        "-",
+        all_time_bins + 4
+      )
+    ),
+    y = reorder(
+      Parameter,
+      proportion_missing
+    ),
+    fill = proportion_missing
+  )
+) +
+  geom_tile() +
+  scale_fill_gradient(
+    low = "white",
+    high = "steelblue",
+    labels =
+      scales::percent_format(
+        accuracy = 1
+      )
+  ) +
+  labs(
+    title =
+      "Temporal Missingness During the First 48 Hours",
+
+    subtitle =
+      "Percent of ICU stays without a valid measurement in each 4-hour interval",
+
+    x =
+      "Hours since ICU admission",
+
+    y =
+      "Clinical variable",
+
+    fill =
+      "% missing"
+  ) +
+  theme_minimal(
+    base_size = 10
+  ) +
+  theme(
+    axis.text.x =
+      element_text(
+        angle = 45,
+        hjust = 1
+      )
+  )
+
+ggsave(
+  here(
+    "output",
+    "temporal_missingness_heatmap.png"
+  ),
+  temporal_missingness_plot,
+  width = 9,
+  height = 10,
+  dpi = 150
+)
 
 # -----------------------------------------------------------------------------
 # 8. Plot temporal measurement rates
