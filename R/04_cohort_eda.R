@@ -918,7 +918,7 @@ cat(
 )
 
 cat(
-  "  output/wide_presence_summary.csv\n"
+  "  output/wide_missingness_bar.png\n"
 )
 
 cat(
