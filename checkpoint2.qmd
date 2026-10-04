@@ -1,0 +1,628 @@
+---
+title: "BIOSTAT 707 — Checkpoint 2"
+subtitle: "Feature Engineering and Supervised Modeling"
+author: "Yixuan Liu"
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    code-fold: true
+    code-tools: true
+    embed-resources: true
+execute:
+  echo: true
+  warning: false
+  message: false
+  freeze: auto
+---
+
+```{r}
+#| label: setup
+#| include: false
+
+library(readr)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(knitr)
+library(here)
+
+options(
+  dplyr.summarise.inform = FALSE
+)
+```
+
+# Overview
+
+The goal of Checkpoint 2 is to develop and evaluate models for predicting in-hospital mortality using information observed during the first 48 hours of an ICU stay in the PhysioNet/Computing in Cardiology Challenge 2012 data.
+
+Set A (`n = 4,000`) was used exclusively for model development and validation. Candidate models were compared using cross-validation within Set A. Set B (`n = 4,000`) was reserved as a held-out test set and was consulted once only after the final model and its preprocessing pipeline had been frozen.
+
+The analysis had four main objectives:
+
+1. construct clinically motivated predictors from the 48-hour observation window;
+2. compare a conventional logistic regression model with nonlinear and regularized alternatives;
+3. compare the regularized models with random forest and gradient boosting;
+4. evaluate the frozen final model once on Set B and compare it with the supplied SAPS-I and SOFA clinical severity scores.
+
+All preprocessing steps that learned information from the data—including imputation, feature filtering, scaling, and hyperparameter selection—were performed within the appropriate training partition during cross-validation.
+
+# Data and prediction target
+
+The primary outcome was in-hospital death:
+
+\[
+Y_i =
+\begin{cases}
+1, & \text{patient died in hospital},\\
+0, & \text{otherwise}.
+\end{cases}
+\]
+
+The predictor observation window was restricted to the first 48 hours of the ICU stay.
+
+No predictor was constructed using information after 48 hours. In particular, length of stay, survival time, in-hospital mortality, discharge information, and measurements occurring after the observation window were not used as predictors.
+
+```{r}
+#| label: cohort-summary
+
+set_a <- read_csv(
+  here("output", "set-a_features.csv"),
+  show_col_types = FALSE
+)
+
+set_b <- read_csv(
+  here("output", "set-b_features.csv"),
+  show_col_types = FALSE
+)
+
+set_b_results <- read_csv(
+  here("output", "set-b_test_performance.csv"),
+  show_col_types = FALSE
+)
+
+cohort_summary <- tibble(
+  Dataset = c(
+    "Set A",
+    "Set B"
+  ),
+
+  Role = c(
+    "Development / cross-validation",
+    "Single-look held-out test"
+  ),
+
+  `ICU stays` = c(
+    nrow(set_a),
+    nrow(set_b)
+  ),
+
+  Deaths = c(
+    sum(set_a$`In-hospital_death` == 1),
+    set_b_results$deaths[
+      set_b_results$model == "LASSO"
+    ]
+  ),
+
+  Mortality = c(
+    mean(set_a$`In-hospital_death` == 1),
+    set_b_results$mortality[
+      set_b_results$model == "LASSO"
+    ]
+  )
+)
+
+cohort_summary |>
+  mutate(
+    Mortality = sprintf(
+      "%.1f%%",
+      100 * Mortality
+    )
+  ) |>
+  kable(
+    caption = "Development and held-out test cohorts."
+  )
+```
+
+Set A contained 554 in-hospital deaths (13.9%), while Set B contained 568 deaths (14.2%).
+
+# Feature engineering
+
+## Clinical motivation
+
+The raw Challenge 2012 records contain irregularly sampled vital signs and laboratory measurements during the first 48 hours. A single measurement does not fully describe either a patient's physiological state or its evolution over time. I therefore represented each ICU stay using several complementary feature families.
+
+The feature construction step produced 313 candidate predictors before training-fold feature filtering.
+
+## Summary features
+
+For longitudinal clinical variables, summary features described the level and range of the measurements observed during the first 48 hours. Depending on the variable, these included:
+
+\[
+X_{\mathrm{first}},
+\quad
+X_{\mathrm{last}},
+\quad
+X_{\min},
+\quad
+X_{\max},
+\quad
+X_{\mathrm{mean}}.
+\]
+
+These features were intended to capture different aspects of physiological severity. For example, a minimum blood pressure may contain information that is not represented by the mean blood pressure, while the last measurement may reflect a patient's condition near the end of the observation window.
+
+For clinically cumulative variables such as urine output, cumulative summaries were also constructed where appropriate.
+
+## Trend features
+
+Changes over the observation window were represented using both differences and estimated temporal trends.
+
+A simple change feature was defined as
+
+\[
+\Delta X =
+X_{\mathrm{last}} -
+X_{\mathrm{first}}.
+\]
+
+Slope features summarized the direction and rate of change in variables with sufficient repeated measurements.
+
+These features distinguish patients with similar overall levels but different trajectories. For example, two patients may have similar mean creatinine values while one is improving and the other is worsening.
+
+## Measurement frequency and missingness
+
+Missingness was represented explicitly rather than being treated only as a nuisance requiring imputation.
+
+For longitudinal variables, the feature set included measurement counts and indicators of whether a variable was unavailable during the observation window:
+
+\[
+M_X =
+I(X \text{ was not measured}).
+\]
+
+This is clinically relevant because measurement itself may reflect the care process. A laboratory test may be ordered preferentially for patients whose clinical presentation raises concern.
+
+These indicators are interpreted as predictive features, not as causal effects of ordering or withholding a measurement.
+
+```{r}
+#| label: feature-summary
+
+feature_dictionary <- read_csv(
+  here("output", "feature_dictionary.csv"),
+  show_col_types = FALSE
+)
+
+feature_family_summary <- feature_dictionary |>
+  count(
+    feature_type,
+    name = "Number of features"
+  ) |>
+  arrange(
+    desc(`Number of features`)
+  )
+
+feature_family_summary |>
+  kable(
+    caption = "Engineered feature families."
+  )
+```
+
+# Feature quality assessment
+
+Before model fitting, the engineered feature table was audited for invalid values, zero-variance predictors, extreme missingness, and consistency between measurement counts and missingness indicators.
+
+Twenty candidate features had at least 80% missingness in Set A. These were primarily features derived from infrequently measured laboratory variables and slope features requiring multiple observations.
+
+The 80% missingness rule was implemented within the modeling pipeline rather than by using validation or test-set information. Explicit missingness indicators and measurement-count features were protected from this filtering rule because measurement availability was itself intentionally represented as predictive information.
+
+No zero-variance engineered predictors were identified in the initial Set A audit.
+
+# Validation design and leakage prevention
+
+## Set A cross-validation
+
+Set A was divided into five fixed stratified folds. The folds were balanced with respect to in-hospital mortality.
+
+```{r}
+#| label: cv-folds
+
+cv_fold_summary <- read_csv(
+  here("output", "cv_fold_summary.csv"),
+  show_col_types = FALSE
+)
+
+cv_fold_summary |>
+  mutate(
+    mortality_rate =
+      sprintf(
+        "%.2f%%",
+        100 * mortality_rate
+      )
+  ) |>
+  kable(
+    caption = "Fixed stratified five-fold cross-validation structure in Set A."
+  )
+```
+
+Each validation fold contained approximately 800 ICU stays and approximately 110--111 deaths.
+
+## Leakage-safe preprocessing
+
+For every cross-validation split, preprocessing parameters were learned using only the corresponding training observations.
+
+This included:
+
+- feature eligibility based on missingness;
+- median imputation of continuous variables;
+- mode imputation where needed for categorical variables;
+- construction of the categorical design matrix;
+- standardization for regularized regression;
+- hyperparameter selection.
+
+The validation observations did not contribute to any of these fitted preprocessing quantities.
+
+For regularized regression, random forest, and gradient boosting, hyperparameters were selected within the training portion of each outer fold using an inner stratified cross-validation loop. The outer fold was then used only for performance estimation.
+
+This nested structure separates the data used to choose a model configuration from the data used to estimate the performance of that configuration.
+
+## Held-out Set B
+
+Set B was not used for feature engineering, preprocessing choices, hyperparameter selection, or model-class selection.
+
+After all Set A analyses were complete, LASSO was frozen as the primary model. The frozen Set A preprocessing pipeline and LASSO hyperparameters were then applied to Set B exactly once.
+
+# Models
+
+## Clinical benchmarks
+
+The supplied SAPS-I and SOFA scores were treated as clinical benchmarks rather than predictors in the machine-learning models.
+
+Within Set A, each score was mapped to mortality probability using logistic regression fitted within the training folds.
+
+## Logistic regression baseline
+
+A compact logistic regression model was constructed from a prespecified set of clinically interpretable demographic, physiological, laboratory, trajectory, and missingness features.
+
+The ordinary logistic model intentionally used a compact predictor set rather than fitting an unpenalized regression to all engineered features.
+
+## Nonlinear logistic regression
+
+To examine whether clinically plausible nonlinear effects materially improved prediction, selected continuous predictors were represented using natural cubic spline terms with three degrees of freedom.
+
+The nonlinear terms included age, mean heart rate, minimum mean arterial pressure, mean creatinine, and maximum lactate. Other baseline predictors remained in the model.
+
+The spline specification was evaluated using the same held-out Set A folds as the linear logistic baseline.
+
+## Regularized logistic regression
+
+The full engineered feature space was modeled using three regularization strategies:
+
+\[
+\text{Ridge}: \alpha = 0,
+\]
+
+\[
+\text{LASSO}: \alpha = 1,
+\]
+
+and
+
+\[
+\text{Elastic Net}: 0 < \alpha < 1.
+\]
+
+For the elastic net, candidate mixing parameters were
+
+\[
+\alpha \in
+\{0.25, 0.50, 0.75\}.
+\]
+
+Regularization strength was selected using inner cross-validation.
+
+Continuous design-matrix columns were standardized using training-partition means and standard deviations before fitting the regularized models.
+
+## Random forest
+
+Random forest was used as a nonlinear tree-based comparator. A compact prespecified grid varied the fraction of candidate predictors considered at each split and minimum terminal-node size.
+
+Tree models were not standardized because split decisions are not sensitive to linear rescaling of predictors.
+
+## Gradient boosting
+
+Gradient boosting was implemented with XGBoost. The prespecified tuning grid varied tree depth, learning rate, and minimum child weight.
+
+The primary boosting analysis allowed up to 400 boosting rounds with early stopping performed only within the inner validation folds.
+
+Because the selected configurations reached the 400-round search boundary, a secondary sensitivity analysis extended the maximum to 1,000 rounds. This sensitivity analysis was not used to redefine the primary model-selection procedure.
+
+# Set A model comparison
+
+```{r}
+#| label: set-a-model-comparison
+
+model_comparison <- read_csv(
+  here("output", "model_comparison_final_set_a.csv"),
+  show_col_types = FALSE
+)
+
+model_comparison_display <- model_comparison |>
+  transmute(
+    Model = model,
+    Family = model_family,
+    Complexity = complexity,
+    AUROC = sprintf("%.3f", auc),
+    Brier = sprintf("%.3f", brier),
+    `Log loss` = sprintf("%.3f", log_loss)
+  )
+
+model_comparison_display |>
+  kable(
+    caption = "Out-of-fold Set A performance of candidate models."
+  )
+```
+
+The clinical severity scores had relatively limited discrimination in Set A: SAPS-I achieved an AUROC of 0.637 and SOFA an AUROC of 0.625.
+
+The compact logistic baseline substantially improved discrimination, reaching an AUROC of 0.800.
+
+Adding the prespecified nonlinear spline terms did not improve performance. The nonlinear logistic model had an AUROC of 0.799 compared with 0.800 for the linear logistic baseline, with similarly slightly worse Brier score and log loss. Thus, the examined nonlinear specification did not provide meaningful predictive benefit.
+
+Regularization produced the largest improvement over the conventional logistic baseline. Ridge, elastic net, and LASSO achieved AUROCs of approximately 0.845--0.847. LASSO had the highest AUROC among the regularized models at 0.847 and also had the lowest log loss of the candidate primary models.
+
+Random forest achieved an AUROC of 0.839 and therefore did not improve on the regularized logistic models.
+
+Gradient boosting achieved the highest primary Set A AUROC at 0.849. However, its advantage over LASSO was small:
+
+\[
+0.8492 - 0.8469
+\approx 0.0023.
+\]
+
+Thus, increasing model complexity from sparse regularized logistic regression to gradient boosting produced only a marginal improvement in discrimination.
+
+# Gradient-boosting sensitivity analysis
+
+The primary XGBoost configurations reached the prespecified maximum of 400 boosting rounds. I therefore performed one sensitivity analysis in which the structural hyperparameter grid was held fixed but the maximum training horizon was increased to 1,000 rounds.
+
+```{r}
+#| label: xgb-sensitivity
+
+xgb_sensitivity <- read_csv(
+  here(
+    "output",
+    "xgb_round_sensitivity_comparison.csv"
+  ),
+  show_col_types = FALSE
+)
+
+xgb_sensitivity |>
+  transmute(
+    Analysis = analysis,
+    AUROC = sprintf("%.3f", auc),
+    Brier = sprintf("%.3f", brier),
+    `Log loss` = sprintf("%.3f", log_loss)
+  ) |>
+  kable(
+    caption = "Sensitivity analysis for the XGBoost boosting-round boundary."
+  )
+```
+
+Extending the boosting horizon increased AUROC from 0.849 to 0.855, but probability accuracy deteriorated substantially: the Brier score increased from 0.091 to 0.099 and log loss increased from 0.308 to 0.379.
+
+All selected inner fits still reached the 1,000-round boundary. Rather than continuing an open-ended search after observing Set A results, I stopped model development at this point and retained the original boosting analysis as the primary XGBoost comparison.
+
+# Final model selection
+
+The final model was selected before consulting Set B.
+
+Although gradient boosting achieved the highest primary Set A AUROC, its advantage over LASSO was only approximately 0.002 AUROC units. LASSO provided nearly identical discrimination with a substantially simpler sparse model and strong probability performance.
+
+LASSO was therefore frozen as the primary model.
+
+The final Set A tuning step selected
+
+\[
+\alpha = 1
+\]
+
+and
+
+\[
+\lambda = 0.00299.
+\]
+
+```{r}
+#| label: final-lasso-configuration
+
+final_regularized_configuration <- read_csv(
+  here(
+    "output",
+    "regularized_final_configuration_set_a.csv"
+  ),
+  show_col_types = FALSE
+)
+
+final_regularized_configuration |>
+  filter(
+    model == "LASSO"
+  ) |>
+  transmute(
+    Model = model,
+    Alpha = alpha,
+    Lambda = sprintf("%.6f", lambda),
+    `Internal CV AUROC` = sprintf(
+      "%.3f",
+      mean_auc
+    )
+  ) |>
+  kable(
+    caption = "Frozen final LASSO configuration selected using Set A only."
+  )
+```
+
+After this model specification was frozen, no feature, preprocessing, model-class, or hyperparameter changes were made in response to Set B.
+
+# Single-look held-out Set B evaluation
+
+The frozen LASSO preprocessing pipeline was refit using all of Set A and then applied unchanged to Set B. Set B outcomes were consulted only after the predictions had been generated.
+
+```{r}
+#| label: set-b-performance
+
+set_b_performance <- read_csv(
+  here(
+    "output",
+    "set-b_test_performance.csv"
+  ),
+  show_col_types = FALSE
+)
+
+set_b_performance |>
+  transmute(
+    Model = model,
+    N = n,
+    Deaths = deaths,
+    Mortality = sprintf(
+      "%.1f%%",
+      100 * mortality
+    ),
+    AUROC = sprintf("%.3f", auc),
+    Brier = sprintf("%.3f", brier),
+    `Log loss` = sprintf("%.3f", log_loss)
+  ) |>
+  kable(
+    caption = "Single-look held-out performance in Set B."
+  )
+```
+
+The frozen LASSO model achieved
+
+\[
+\boxed{\mathrm{AUROC}=0.863}
+\]
+
+on Set B, compared with 0.660 for SAPS-I and 0.657 for SOFA.
+
+LASSO also achieved a Brier score of 0.088 and log loss of 0.290, compared with approximately 0.116--0.117 and 0.387--0.390, respectively, for the clinical benchmarks.
+
+Thus, the improvement observed during Set A development generalized to the independent Set B cohort.
+
+# Development-to-test comparison
+
+```{r}
+#| label: set-a-vs-set-b
+
+lasso_a_b <- read_csv(
+  here(
+    "output",
+    "lasso_set_a_vs_set_b.csv"
+  ),
+  show_col_types = FALSE
+)
+
+lasso_a_b |>
+  transmute(
+    Dataset = dataset,
+    AUROC = sprintf("%.3f", auc),
+    Brier = sprintf("%.3f", brier),
+    `Log loss` = sprintf("%.3f", log_loss)
+  ) |>
+  kable(
+    caption = "Frozen LASSO performance in Set A development and Set B held-out evaluation."
+  )
+```
+
+LASSO improved from an out-of-fold Set A AUROC of 0.847 to a Set B AUROC of 0.863. Its Brier score decreased from 0.092 to 0.088 and log loss decreased from 0.302 to 0.290.
+
+The independent test performance therefore showed no evidence of a substantial generalization loss.
+
+The Set B result was not used to guide any subsequent changes to the feature set, preprocessing pipeline, model class, or hyperparameters.
+
+# Interpretation
+
+Several findings emerged from the model comparison.
+
+First, clinically motivated feature engineering substantially improved mortality prediction relative to the supplied severity-score benchmarks. The compact logistic regression model increased Set A AUROC from 0.637 for SAPS-I and 0.625 for SOFA to 0.800.
+
+Second, explicitly modeling selected continuous predictors with natural cubic splines did not improve predictive performance. The nonlinear logistic model achieved an AUROC of 0.799, essentially identical to and slightly below the linear logistic baseline. Thus, within the nonlinear specification examined here, additional spline flexibility was not useful.
+
+Third, regularization provided a substantial additional improvement. Ridge, elastic net, and LASSO all achieved Set A AUROCs near 0.85. This suggests that the richer engineered feature representation contained useful predictive information, but that controlling model complexity was important when using the larger feature space.
+
+Fourth, more flexible tree-based models did not uniformly improve performance. Random forest performed slightly worse than the regularized logistic models. Gradient boosting produced the highest primary Set A AUROC, but its improvement over LASSO was only approximately 0.002 AUROC units.
+
+Taken together, these results suggest that most of the predictive gain was obtained from clinically motivated feature engineering combined with regularization rather than from substantially increasing model nonlinearity and complexity.
+
+Finally, the frozen LASSO model generalized well to Set B. Its held-out AUROC of 0.863 exceeded its Set A out-of-fold estimate of 0.847 and substantially exceeded both SAPS-I and SOFA on the same test cohort.
+
+# Missingness and interpretation
+
+Missingness in these ICU data should not necessarily be interpreted as random.
+
+Whether a laboratory value or physiological measurement is collected may depend on clinicians' assessment of the patient's condition. Consequently, explicit missingness indicators can carry predictive information about both patient state and the clinical measurement process.
+
+For that reason, missingness indicators were included as predictors where appropriate. However, their predictive associations should not be interpreted causally. For example, an association between measurement of lactate and mortality would not imply that ordering a lactate test causes mortality. Measurement decisions may instead reflect underlying clinical concern or severity.
+
+The same caution applies more broadly to other predictors in the model. The analysis was designed for prediction, not causal inference. LASSO coefficients describe conditional predictive associations under the fitted model and should not be interpreted as causal treatment or exposure effects.
+
+# Limitations
+
+Several limitations should be considered when interpreting the results.
+
+First, the engineered features compress irregular longitudinal measurements into summary statistics and trends. Although this produces an interpretable and computationally manageable representation, it necessarily discards some temporal information.
+
+Second, measurement frequency and missingness may reflect both patient physiology and clinical practice. Predictive performance may therefore depend partly on care patterns specific to the source population.
+
+Third, the comparison of model classes was conducted within a single development cohort. Cross-validation estimates remain subject to sampling variability and model-selection optimism, even when nested cross-validation is used carefully.
+
+Fourth, Set B provides an independent test of the frozen model within the same overall Challenge 2012 data source. It therefore provides evidence of held-out generalization but does not by itself establish transportability to different hospitals, time periods, or clinical populations.
+
+Finally, the analysis evaluates predictive associations only. No predictor should be interpreted as having a causal effect on mortality from these analyses.
+
+# Reproducibility
+
+The analysis was organized as a sequence of scripts with distinct responsibilities:
+
+```text
+R/05_build_features.R
+    Construct 48-hour engineered features for Sets A and B.
+
+R/06_feature_audit.R
+    Audit feature distributions, missingness, and structural consistency.
+
+R/07_define_resampling.R
+    Define fixed stratified five-fold Set A cross-validation folds.
+
+R/08_logistic_baseline.R
+    Evaluate SAPS-I, SOFA, and the compact logistic baseline.
+
+R/09_regularized_models.R
+    Fit and tune Ridge, LASSO, and Elastic Net using nested cross-validation.
+
+R/10_tree_boosting_models.R
+    Fit and tune Random Forest and Gradient Boosting models.
+
+R/10b_xgb_round_sensitivity.R
+    Evaluate the prespecified XGBoost boosting-round sensitivity analysis.
+
+R/11_model_assessment.R
+    Examine nonlinear logistic effects and summarize Set A model performance.
+
+R/12_test_set_evaluation.R
+    Apply the frozen primary model once to held-out Set B.
+```
+
+Software dependencies and versions are managed using Pixi. Random seeds and Set A fold assignments were fixed before model comparison so that candidate models were evaluated on the same outer validation partitions.
+
+# Conclusion
+
+Clinically motivated features constructed from the first 48 hours of ICU data substantially improved prediction of in-hospital mortality relative to the supplied SAPS-I and SOFA severity scores.
+
+A compact logistic regression model achieved a Set A out-of-fold AUROC of 0.800, while adding prespecified spline nonlinearities did not improve performance. Expanding to the larger engineered feature set with regularization increased AUROC to approximately 0.845--0.847. Random forest did not improve on these models, while gradient boosting achieved only a marginal additional increase in discrimination.
+
+LASSO was selected and frozen as the primary model before Set B was consulted because it provided strong discrimination with a sparse and comparatively interpretable model while avoiding the additional complexity of gradient boosting.
+
+On the single-look held-out Set B evaluation, the frozen LASSO model achieved an AUROC of 0.863, Brier score of 0.088, and log loss of 0.290. On the same cohort, SAPS-I and SOFA achieved AUROCs of 0.660 and 0.657, respectively.
+
+The results therefore support the value of combining clinically motivated 48-hour feature engineering with regularized logistic regression, while showing little evidence that substantially more complex nonlinear models provided a practically meaningful improvement in discrimination.

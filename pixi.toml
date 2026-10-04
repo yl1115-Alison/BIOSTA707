@@ -16,6 +16,11 @@ r-gtsummary = "*"
 r-naniar = "*"
 r-visdat = "*"
 r-here = "*"
+r-proc = "*"
+r-glmnet = "*"
+r-ranger = "*"
+r-xgboost = "*"
+
 
 [tasks]
 build-long = "Rscript R/01_build_long.R"
