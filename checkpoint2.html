@@ -2535,7 +2535,7 @@ window.Quarto = {
 <section id="clinical-motivation" class="level2">
 <h2 class="anchored" data-anchor-id="clinical-motivation">Clinical motivation</h2>
 <p>The raw Challenge 2012 records contain irregularly sampled vital signs and laboratory measurements during the first 48 hours. A single measurement does not fully describe either a patient’s physiological state or its evolution over time. I therefore represented each ICU stay using several complementary feature families.</p>
-<p>The feature construction step produced 313 candidate predictors before training-fold feature filtering.</p>
+<p>The feature construction step produced 313 candidate predictors before training-fold feature filtering, including 37 explicit missingness indicators, 32 slope features, and 23 first-to-last change features. Together, these features represented physiological level, within-window trajectory, measurement frequency, and measurement availability.</p>
 </section>
 <section id="summary-features" class="level2">
 <h2 class="anchored" data-anchor-id="summary-features">Summary features</h2>
@@ -2929,7 +2929,7 @@ window.Quarto = {
 <p>The clinical severity scores had relatively limited discrimination in Set A: SAPS-I achieved an AUROC of 0.637 and SOFA an AUROC of 0.625.</p>
 <p>The compact logistic baseline substantially improved discrimination, reaching an AUROC of 0.800.</p>
 <p>Adding the prespecified nonlinear spline terms did not improve performance. The nonlinear logistic model had an AUROC of 0.799 compared with 0.800 for the linear logistic baseline, with similarly slightly worse Brier score and log loss. Thus, the examined nonlinear specification did not provide meaningful predictive benefit.</p>
-<p>Regularization produced the largest improvement over the conventional logistic baseline. Ridge, elastic net, and LASSO achieved AUROCs of approximately 0.845–0.847. LASSO had the highest AUROC among the regularized models at 0.847 and also had the lowest log loss of the candidate primary models.</p>
+<p>Regularization produced the largest improvement over the conventional logistic baseline. Ridge, elastic net, and LASSO achieved AUROCs of approximately 0.845–0.847. LASSO had the highest AUROC among the regularized models (0.847) and the lowest log loss among the primary machine-learning models evaluated on Set A.</p>
 <p>Random forest achieved an AUROC of 0.839 and therefore did not improve on the regularized logistic models.</p>
 <p>Gradient boosting achieved the highest primary Set A AUROC at 0.849. However, its advantage over LASSO was small:</p>
 <p>[ 0.8492 - 0.8469 . ]</p>
@@ -2937,7 +2937,7 @@ window.Quarto = {
 </section>
 <section id="gradient-boosting-sensitivity-analysis" class="level1">
 <h1>Gradient-boosting sensitivity analysis</h1>
-<p>The primary XGBoost configurations reached the prespecified maximum of 400 boosting rounds. I therefore performed one sensitivity analysis in which the structural hyperparameter grid was held fixed but the maximum training horizon was increased to 1,000 rounds.</p>
+<p>The primary XGBoost configurations reached the prespecified maximum of 400 boosting rounds. After observing this boundary behavior, I performed a one-time sensitivity analysis in which the structural hyperparameter grid was held fixed but the maximum training horizon was increased to 1,000 rounds. This was treated as a secondary diagnostic analysis rather than as an additional primary model-search stage.</p>
 <div class="cell">
 <details class="code-fold">
 <summary>Code</summary>
@@ -2994,8 +2994,7 @@ window.Quarto = {
 <section id="final-model-selection" class="level1">
 <h1>Final model selection</h1>
 <p>The final model was selected before consulting Set B.</p>
-<p>Although gradient boosting achieved the highest primary Set A AUROC, its advantage over LASSO was only approximately 0.002 AUROC units. LASSO provided nearly identical discrimination with a substantially simpler sparse model and strong probability performance.</p>
-<p>LASSO was therefore frozen as the primary model.</p>
+<p>Although gradient boosting achieved the highest primary Set A AUROC, its advantage over LASSO was only approximately 0.002 AUROC units. LASSO achieved nearly identical discrimination, lower log loss, and a substantially simpler sparse representation. Given the small gain in discrimination from gradient boosting relative to its additional complexity, LASSO was frozen as the primary model before Set B was consulted.</p>
 <p>The final Set A tuning step selected</p>
 <p>[ = 1 ]</p>
 <p>and</p>
@@ -3239,7 +3238,7 @@ R/10_tree_boosting_models.R
     Fit and tune Random Forest and Gradient Boosting models.
 
 R/10b_xgb_round_sensitivity.R
-    Evaluate the prespecified XGBoost boosting-round sensitivity analysis.
+    Evaluate a one-time XGBoost boosting-round boundary sensitivity analysis.
 
 R/11_model_assessment.R
     Examine nonlinear logistic effects and summarize Set A model performance.
@@ -3251,10 +3250,10 @@ R/12_test_set_evaluation.R
 <section id="conclusion" class="level1">
 <h1>Conclusion</h1>
 <p>Clinically motivated features constructed from the first 48 hours of ICU data substantially improved prediction of in-hospital mortality relative to the supplied SAPS-I and SOFA severity scores.</p>
-<p>A compact logistic regression model achieved a Set A out-of-fold AUROC of 0.800, while adding prespecified spline nonlinearities did not improve performance. Expanding to the larger engineered feature set with regularization increased AUROC to approximately 0.845–0.847. Random forest did not improve on these models, while gradient boosting achieved only a marginal additional increase in discrimination.</p>
-<p>LASSO was selected and frozen as the primary model before Set B was consulted because it provided strong discrimination with a sparse and comparatively interpretable model while avoiding the additional complexity of gradient boosting.</p>
+<p>A compact logistic regression model achieved a Set A out-of-fold AUROC of 0.800, while adding prespecified spline nonlinearities did not improve performance. Expanding to the larger engineered feature set with regularization increased AUROC to approximately 0.845–0.847. Random forest did not improve on these models, while gradient boosting achieved only a small additional increase in discrimination on Set A.</p>
+<p>LASSO was selected and frozen as the primary model before Set B was consulted because it provided nearly the same discrimination as gradient boosting, lower log loss, and a sparse, comparatively interpretable representation without the additional complexity of boosting.</p>
 <p>On the single-look held-out Set B evaluation, the frozen LASSO model achieved an AUROC of 0.863, Brier score of 0.088, and log loss of 0.290. On the same cohort, SAPS-I and SOFA achieved AUROCs of 0.660 and 0.657, respectively.</p>
-<p>The results therefore support the value of combining clinically motivated 48-hour feature engineering with regularized logistic regression, while showing little evidence that substantially more complex nonlinear models provided a practically meaningful improvement in discrimination.</p>
+<p>The results therefore support the value of combining clinically motivated 48-hour feature engineering with regularized logistic regression. Within Set A, substantially more complex nonlinear models provided only a small additional improvement in discrimination beyond the regularized logistic models.</p>
 <!-- -->
 
 </section>
@@ -3846,7 +3845,7 @@ R/12_test_set_evaluation.R
 <span id="cb10-136"><a href="#cb10-136" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb10-137"><a href="#cb10-137" aria-hidden="true" tabindex="-1"></a>The raw Challenge 2012 records contain irregularly sampled vital signs and laboratory measurements during the first 48 hours. A single measurement does not fully describe either a patient&#39;s physiological state or its evolution over time. I therefore represented each ICU stay using several complementary feature families.</span>
 <span id="cb10-138"><a href="#cb10-138" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-139"><a href="#cb10-139" aria-hidden="true" tabindex="-1"></a>The feature construction step produced 313 candidate predictors before training-fold feature filtering.</span>
+<span id="cb10-139"><a href="#cb10-139" aria-hidden="true" tabindex="-1"></a>The feature construction step produced 313 candidate predictors before training-fold feature filtering, including 37 explicit missingness indicators, 32 slope features, and 23 first-to-last change features. Together, these features represented physiological level, within-window trajectory, measurement frequency, and measurement availability.</span>
 <span id="cb10-140"><a href="#cb10-140" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb10-141"><a href="#cb10-141" aria-hidden="true" tabindex="-1"></a><span class="fu">## Summary features</span></span>
 <span id="cb10-142"><a href="#cb10-142" aria-hidden="true" tabindex="-1"></a></span>
@@ -4083,7 +4082,7 @@ R/12_test_set_evaluation.R
 <span id="cb10-379"><a href="#cb10-379" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb10-380"><a href="#cb10-380" aria-hidden="true" tabindex="-1"></a>Adding the prespecified nonlinear spline terms did not improve performance. The nonlinear logistic model had an AUROC of 0.799 compared with 0.800 for the linear logistic baseline, with similarly slightly worse Brier score and log loss. Thus, the examined nonlinear specification did not provide meaningful predictive benefit.</span>
 <span id="cb10-381"><a href="#cb10-381" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-382"><a href="#cb10-382" aria-hidden="true" tabindex="-1"></a>Regularization produced the largest improvement over the conventional logistic baseline. Ridge, elastic net, and LASSO achieved AUROCs of approximately 0.845--0.847. LASSO had the highest AUROC among the regularized models at 0.847 and also had the lowest log loss of the candidate primary models.</span>
+<span id="cb10-382"><a href="#cb10-382" aria-hidden="true" tabindex="-1"></a>Regularization produced the largest improvement over the conventional logistic baseline. Ridge, elastic net, and LASSO achieved AUROCs of approximately 0.845--0.847. LASSO had the highest AUROC among the regularized models (0.847) and the lowest log loss among the primary machine-learning models evaluated on Set A.</span>
 <span id="cb10-383"><a href="#cb10-383" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb10-384"><a href="#cb10-384" aria-hidden="true" tabindex="-1"></a>Random forest achieved an AUROC of 0.839 and therefore did not improve on the regularized logistic models.</span>
 <span id="cb10-385"><a href="#cb10-385" aria-hidden="true" tabindex="-1"></a></span>
@@ -4098,7 +4097,7 @@ R/12_test_set_evaluation.R
 <span id="cb10-394"><a href="#cb10-394" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb10-395"><a href="#cb10-395" aria-hidden="true" tabindex="-1"></a><span class="fu"># Gradient-boosting sensitivity analysis</span></span>
 <span id="cb10-396"><a href="#cb10-396" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-397"><a href="#cb10-397" aria-hidden="true" tabindex="-1"></a>The primary XGBoost configurations reached the prespecified maximum of 400 boosting rounds. I therefore performed one sensitivity analysis in which the structural hyperparameter grid was held fixed but the maximum training horizon was increased to 1,000 rounds.</span>
+<span id="cb10-397"><a href="#cb10-397" aria-hidden="true" tabindex="-1"></a>The primary XGBoost configurations reached the prespecified maximum of 400 boosting rounds. After observing this boundary behavior, I performed a one-time sensitivity analysis in which the structural hyperparameter grid was held fixed but the maximum training horizon was increased to 1,000 rounds. This was treated as a secondary diagnostic analysis rather than as an additional primary model-search stage.</span>
 <span id="cb10-398"><a href="#cb10-398" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb10-401"><a href="#cb10-401" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
 <span id="cb10-402"><a href="#cb10-402" aria-hidden="true" tabindex="-1"></a><span class="co">#| label: xgb-sensitivity</span></span>
@@ -4127,219 +4126,218 @@ R/12_test_set_evaluation.R
 <span id="cb10-425"><a href="#cb10-425" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb10-426"><a href="#cb10-426" aria-hidden="true" tabindex="-1"></a>All selected inner fits still reached the 1,000-round boundary. Rather than continuing an open-ended search after observing Set A results, I stopped model development at this point and retained the original boosting analysis as the primary XGBoost comparison.</span>
 <span id="cb10-427"><a href="#cb10-427" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-428"><a href="#cb10-428" aria-hidden="true" tabindex="-1"></a><span class="fu"># Final model selection</span></span>
-<span id="cb10-429"><a href="#cb10-429" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-430"><a href="#cb10-430" aria-hidden="true" tabindex="-1"></a>The final model was selected before consulting Set B.</span>
-<span id="cb10-431"><a href="#cb10-431" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-432"><a href="#cb10-432" aria-hidden="true" tabindex="-1"></a>Although gradient boosting achieved the highest primary Set A AUROC, its advantage over LASSO was only approximately 0.002 AUROC units. LASSO provided nearly identical discrimination with a substantially simpler sparse model and strong probability performance.</span>
-<span id="cb10-433"><a href="#cb10-433" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-434"><a href="#cb10-434" aria-hidden="true" tabindex="-1"></a>LASSO was therefore frozen as the primary model.</span>
-<span id="cb10-435"><a href="#cb10-435" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-436"><a href="#cb10-436" aria-hidden="true" tabindex="-1"></a>The final Set A tuning step selected</span>
-<span id="cb10-437"><a href="#cb10-437" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-438"><a href="#cb10-438" aria-hidden="true" tabindex="-1"></a><span class="sc">\[</span></span>
-<span id="cb10-439"><a href="#cb10-439" aria-hidden="true" tabindex="-1"></a>\alpha = 1</span>
-<span id="cb10-440"><a href="#cb10-440" aria-hidden="true" tabindex="-1"></a><span class="sc">\]</span></span>
-<span id="cb10-441"><a href="#cb10-441" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-442"><a href="#cb10-442" aria-hidden="true" tabindex="-1"></a>and</span>
-<span id="cb10-443"><a href="#cb10-443" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-444"><a href="#cb10-444" aria-hidden="true" tabindex="-1"></a><span class="sc">\[</span></span>
-<span id="cb10-445"><a href="#cb10-445" aria-hidden="true" tabindex="-1"></a>\lambda = 0.00299.</span>
-<span id="cb10-446"><a href="#cb10-446" aria-hidden="true" tabindex="-1"></a><span class="sc">\]</span></span>
-<span id="cb10-447"><a href="#cb10-447" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-450"><a href="#cb10-450" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
-<span id="cb10-451"><a href="#cb10-451" aria-hidden="true" tabindex="-1"></a><span class="co">#| label: final-lasso-configuration</span></span>
-<span id="cb10-452"><a href="#cb10-452" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-453"><a href="#cb10-453" aria-hidden="true" tabindex="-1"></a>final_regularized_configuration <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(</span>
-<span id="cb10-454"><a href="#cb10-454" aria-hidden="true" tabindex="-1"></a>  <span class="fu">here</span>(</span>
-<span id="cb10-455"><a href="#cb10-455" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;output&quot;</span>,</span>
-<span id="cb10-456"><a href="#cb10-456" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;regularized_final_configuration_set_a.csv&quot;</span></span>
-<span id="cb10-457"><a href="#cb10-457" aria-hidden="true" tabindex="-1"></a>  ),</span>
-<span id="cb10-458"><a href="#cb10-458" aria-hidden="true" tabindex="-1"></a>  <span class="at">show_col_types =</span> <span class="cn">FALSE</span></span>
-<span id="cb10-459"><a href="#cb10-459" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb10-460"><a href="#cb10-460" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-461"><a href="#cb10-461" aria-hidden="true" tabindex="-1"></a>final_regularized_configuration <span class="sc">|&gt;</span></span>
-<span id="cb10-462"><a href="#cb10-462" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(</span>
-<span id="cb10-463"><a href="#cb10-463" aria-hidden="true" tabindex="-1"></a>    model <span class="sc">==</span> <span class="st">&quot;LASSO&quot;</span></span>
-<span id="cb10-464"><a href="#cb10-464" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">|&gt;</span></span>
-<span id="cb10-465"><a href="#cb10-465" aria-hidden="true" tabindex="-1"></a>  <span class="fu">transmute</span>(</span>
-<span id="cb10-466"><a href="#cb10-466" aria-hidden="true" tabindex="-1"></a>    <span class="at">Model =</span> model,</span>
-<span id="cb10-467"><a href="#cb10-467" aria-hidden="true" tabindex="-1"></a>    <span class="at">Alpha =</span> alpha,</span>
-<span id="cb10-468"><a href="#cb10-468" aria-hidden="true" tabindex="-1"></a>    <span class="at">Lambda =</span> <span class="fu">sprintf</span>(<span class="st">&quot;%.6f&quot;</span>, lambda),</span>
-<span id="cb10-469"><a href="#cb10-469" aria-hidden="true" tabindex="-1"></a>    <span class="st">`</span><span class="at">Internal CV AUROC</span><span class="st">`</span> <span class="ot">=</span> <span class="fu">sprintf</span>(</span>
-<span id="cb10-470"><a href="#cb10-470" aria-hidden="true" tabindex="-1"></a>      <span class="st">&quot;%.3f&quot;</span>,</span>
-<span id="cb10-471"><a href="#cb10-471" aria-hidden="true" tabindex="-1"></a>      mean_auc</span>
-<span id="cb10-472"><a href="#cb10-472" aria-hidden="true" tabindex="-1"></a>    )</span>
-<span id="cb10-473"><a href="#cb10-473" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">|&gt;</span></span>
-<span id="cb10-474"><a href="#cb10-474" aria-hidden="true" tabindex="-1"></a>  <span class="fu">kable</span>(</span>
-<span id="cb10-475"><a href="#cb10-475" aria-hidden="true" tabindex="-1"></a>    <span class="at">caption =</span> <span class="st">&quot;Frozen final LASSO configuration selected using Set A only.&quot;</span></span>
-<span id="cb10-476"><a href="#cb10-476" aria-hidden="true" tabindex="-1"></a>  )</span>
-<span id="cb10-477"><a href="#cb10-477" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb10-478"><a href="#cb10-478" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-479"><a href="#cb10-479" aria-hidden="true" tabindex="-1"></a>After this model specification was frozen, no feature, preprocessing, model-class, or hyperparameter changes were made in response to Set B.</span>
-<span id="cb10-480"><a href="#cb10-480" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-481"><a href="#cb10-481" aria-hidden="true" tabindex="-1"></a><span class="fu"># Single-look held-out Set B evaluation</span></span>
-<span id="cb10-482"><a href="#cb10-482" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-483"><a href="#cb10-483" aria-hidden="true" tabindex="-1"></a>The frozen LASSO preprocessing pipeline was refit using all of Set A and then applied unchanged to Set B. Set B outcomes were consulted only after the predictions had been generated.</span>
-<span id="cb10-484"><a href="#cb10-484" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-487"><a href="#cb10-487" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
-<span id="cb10-488"><a href="#cb10-488" aria-hidden="true" tabindex="-1"></a><span class="co">#| label: set-b-performance</span></span>
-<span id="cb10-489"><a href="#cb10-489" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-490"><a href="#cb10-490" aria-hidden="true" tabindex="-1"></a>set_b_performance <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(</span>
-<span id="cb10-491"><a href="#cb10-491" aria-hidden="true" tabindex="-1"></a>  <span class="fu">here</span>(</span>
-<span id="cb10-492"><a href="#cb10-492" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;output&quot;</span>,</span>
-<span id="cb10-493"><a href="#cb10-493" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;set-b_test_performance.csv&quot;</span></span>
-<span id="cb10-494"><a href="#cb10-494" aria-hidden="true" tabindex="-1"></a>  ),</span>
-<span id="cb10-495"><a href="#cb10-495" aria-hidden="true" tabindex="-1"></a>  <span class="at">show_col_types =</span> <span class="cn">FALSE</span></span>
-<span id="cb10-496"><a href="#cb10-496" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb10-497"><a href="#cb10-497" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-498"><a href="#cb10-498" aria-hidden="true" tabindex="-1"></a>set_b_performance <span class="sc">|&gt;</span></span>
-<span id="cb10-499"><a href="#cb10-499" aria-hidden="true" tabindex="-1"></a>  <span class="fu">transmute</span>(</span>
-<span id="cb10-500"><a href="#cb10-500" aria-hidden="true" tabindex="-1"></a>    <span class="at">Model =</span> model,</span>
-<span id="cb10-501"><a href="#cb10-501" aria-hidden="true" tabindex="-1"></a>    <span class="at">N =</span> n,</span>
-<span id="cb10-502"><a href="#cb10-502" aria-hidden="true" tabindex="-1"></a>    <span class="at">Deaths =</span> deaths,</span>
-<span id="cb10-503"><a href="#cb10-503" aria-hidden="true" tabindex="-1"></a>    <span class="at">Mortality =</span> <span class="fu">sprintf</span>(</span>
-<span id="cb10-504"><a href="#cb10-504" aria-hidden="true" tabindex="-1"></a>      <span class="st">&quot;%.1f%%&quot;</span>,</span>
-<span id="cb10-505"><a href="#cb10-505" aria-hidden="true" tabindex="-1"></a>      <span class="dv">100</span> <span class="sc">*</span> mortality</span>
-<span id="cb10-506"><a href="#cb10-506" aria-hidden="true" tabindex="-1"></a>    ),</span>
-<span id="cb10-507"><a href="#cb10-507" aria-hidden="true" tabindex="-1"></a>    <span class="at">AUROC =</span> <span class="fu">sprintf</span>(<span class="st">&quot;%.3f&quot;</span>, auc),</span>
-<span id="cb10-508"><a href="#cb10-508" aria-hidden="true" tabindex="-1"></a>    <span class="at">Brier =</span> <span class="fu">sprintf</span>(<span class="st">&quot;%.3f&quot;</span>, brier),</span>
-<span id="cb10-509"><a href="#cb10-509" aria-hidden="true" tabindex="-1"></a>    <span class="st">`</span><span class="at">Log loss</span><span class="st">`</span> <span class="ot">=</span> <span class="fu">sprintf</span>(<span class="st">&quot;%.3f&quot;</span>, log_loss)</span>
-<span id="cb10-510"><a href="#cb10-510" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">|&gt;</span></span>
-<span id="cb10-511"><a href="#cb10-511" aria-hidden="true" tabindex="-1"></a>  <span class="fu">kable</span>(</span>
-<span id="cb10-512"><a href="#cb10-512" aria-hidden="true" tabindex="-1"></a>    <span class="at">caption =</span> <span class="st">&quot;Single-look held-out performance in Set B.&quot;</span></span>
-<span id="cb10-513"><a href="#cb10-513" aria-hidden="true" tabindex="-1"></a>  )</span>
-<span id="cb10-514"><a href="#cb10-514" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb10-515"><a href="#cb10-515" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-516"><a href="#cb10-516" aria-hidden="true" tabindex="-1"></a>The frozen LASSO model achieved</span>
-<span id="cb10-517"><a href="#cb10-517" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-518"><a href="#cb10-518" aria-hidden="true" tabindex="-1"></a><span class="sc">\[</span></span>
-<span id="cb10-519"><a href="#cb10-519" aria-hidden="true" tabindex="-1"></a>\boxed{\mathrm{AUROC}=0.863}</span>
-<span id="cb10-520"><a href="#cb10-520" aria-hidden="true" tabindex="-1"></a><span class="sc">\]</span></span>
-<span id="cb10-521"><a href="#cb10-521" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-522"><a href="#cb10-522" aria-hidden="true" tabindex="-1"></a>on Set B, compared with 0.660 for SAPS-I and 0.657 for SOFA.</span>
-<span id="cb10-523"><a href="#cb10-523" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-524"><a href="#cb10-524" aria-hidden="true" tabindex="-1"></a>LASSO also achieved a Brier score of 0.088 and log loss of 0.290, compared with approximately 0.116--0.117 and 0.387--0.390, respectively, for the clinical benchmarks.</span>
-<span id="cb10-525"><a href="#cb10-525" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-526"><a href="#cb10-526" aria-hidden="true" tabindex="-1"></a>Thus, the improvement observed during Set A development generalized to the independent Set B cohort.</span>
-<span id="cb10-527"><a href="#cb10-527" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-528"><a href="#cb10-528" aria-hidden="true" tabindex="-1"></a><span class="fu"># Development-to-test comparison</span></span>
-<span id="cb10-529"><a href="#cb10-529" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-532"><a href="#cb10-532" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
-<span id="cb10-533"><a href="#cb10-533" aria-hidden="true" tabindex="-1"></a><span class="co">#| label: set-a-vs-set-b</span></span>
-<span id="cb10-534"><a href="#cb10-534" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-535"><a href="#cb10-535" aria-hidden="true" tabindex="-1"></a>lasso_a_b <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(</span>
-<span id="cb10-536"><a href="#cb10-536" aria-hidden="true" tabindex="-1"></a>  <span class="fu">here</span>(</span>
-<span id="cb10-537"><a href="#cb10-537" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;output&quot;</span>,</span>
-<span id="cb10-538"><a href="#cb10-538" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;lasso_set_a_vs_set_b.csv&quot;</span></span>
-<span id="cb10-539"><a href="#cb10-539" aria-hidden="true" tabindex="-1"></a>  ),</span>
-<span id="cb10-540"><a href="#cb10-540" aria-hidden="true" tabindex="-1"></a>  <span class="at">show_col_types =</span> <span class="cn">FALSE</span></span>
-<span id="cb10-541"><a href="#cb10-541" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb10-542"><a href="#cb10-542" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-543"><a href="#cb10-543" aria-hidden="true" tabindex="-1"></a>lasso_a_b <span class="sc">|&gt;</span></span>
-<span id="cb10-544"><a href="#cb10-544" aria-hidden="true" tabindex="-1"></a>  <span class="fu">transmute</span>(</span>
-<span id="cb10-545"><a href="#cb10-545" aria-hidden="true" tabindex="-1"></a>    <span class="at">Dataset =</span> dataset,</span>
-<span id="cb10-546"><a href="#cb10-546" aria-hidden="true" tabindex="-1"></a>    <span class="at">AUROC =</span> <span class="fu">sprintf</span>(<span class="st">&quot;%.3f&quot;</span>, auc),</span>
-<span id="cb10-547"><a href="#cb10-547" aria-hidden="true" tabindex="-1"></a>    <span class="at">Brier =</span> <span class="fu">sprintf</span>(<span class="st">&quot;%.3f&quot;</span>, brier),</span>
-<span id="cb10-548"><a href="#cb10-548" aria-hidden="true" tabindex="-1"></a>    <span class="st">`</span><span class="at">Log loss</span><span class="st">`</span> <span class="ot">=</span> <span class="fu">sprintf</span>(<span class="st">&quot;%.3f&quot;</span>, log_loss)</span>
-<span id="cb10-549"><a href="#cb10-549" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">|&gt;</span></span>
-<span id="cb10-550"><a href="#cb10-550" aria-hidden="true" tabindex="-1"></a>  <span class="fu">kable</span>(</span>
-<span id="cb10-551"><a href="#cb10-551" aria-hidden="true" tabindex="-1"></a>    <span class="at">caption =</span> <span class="st">&quot;Frozen LASSO performance in Set A development and Set B held-out evaluation.&quot;</span></span>
-<span id="cb10-552"><a href="#cb10-552" aria-hidden="true" tabindex="-1"></a>  )</span>
-<span id="cb10-553"><a href="#cb10-553" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb10-554"><a href="#cb10-554" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-555"><a href="#cb10-555" aria-hidden="true" tabindex="-1"></a>LASSO improved from an out-of-fold Set A AUROC of 0.847 to a Set B AUROC of 0.863. Its Brier score decreased from 0.092 to 0.088 and log loss decreased from 0.302 to 0.290.</span>
-<span id="cb10-556"><a href="#cb10-556" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-557"><a href="#cb10-557" aria-hidden="true" tabindex="-1"></a>The independent test performance therefore showed no evidence of a substantial generalization loss.</span>
-<span id="cb10-558"><a href="#cb10-558" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-559"><a href="#cb10-559" aria-hidden="true" tabindex="-1"></a>The Set B result was not used to guide any subsequent changes to the feature set, preprocessing pipeline, model class, or hyperparameters.</span>
-<span id="cb10-560"><a href="#cb10-560" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-561"><a href="#cb10-561" aria-hidden="true" tabindex="-1"></a><span class="fu"># Interpretation</span></span>
-<span id="cb10-562"><a href="#cb10-562" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-563"><a href="#cb10-563" aria-hidden="true" tabindex="-1"></a>Several findings emerged from the model comparison.</span>
-<span id="cb10-564"><a href="#cb10-564" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-565"><a href="#cb10-565" aria-hidden="true" tabindex="-1"></a>First, clinically motivated feature engineering substantially improved mortality prediction relative to the supplied severity-score benchmarks. The compact logistic regression model increased Set A AUROC from 0.637 for SAPS-I and 0.625 for SOFA to 0.800.</span>
-<span id="cb10-566"><a href="#cb10-566" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-567"><a href="#cb10-567" aria-hidden="true" tabindex="-1"></a>Second, explicitly modeling selected continuous predictors with natural cubic splines did not improve predictive performance. The nonlinear logistic model achieved an AUROC of 0.799, essentially identical to and slightly below the linear logistic baseline. Thus, within the nonlinear specification examined here, additional spline flexibility was not useful.</span>
-<span id="cb10-568"><a href="#cb10-568" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-569"><a href="#cb10-569" aria-hidden="true" tabindex="-1"></a>Third, regularization provided a substantial additional improvement. Ridge, elastic net, and LASSO all achieved Set A AUROCs near 0.85. This suggests that the richer engineered feature representation contained useful predictive information, but that controlling model complexity was important when using the larger feature space.</span>
-<span id="cb10-570"><a href="#cb10-570" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-571"><a href="#cb10-571" aria-hidden="true" tabindex="-1"></a>Fourth, more flexible tree-based models did not uniformly improve performance. Random forest performed slightly worse than the regularized logistic models. Gradient boosting produced the highest primary Set A AUROC, but its improvement over LASSO was only approximately 0.002 AUROC units.</span>
-<span id="cb10-572"><a href="#cb10-572" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-573"><a href="#cb10-573" aria-hidden="true" tabindex="-1"></a>Taken together, these results suggest that most of the predictive gain was obtained from clinically motivated feature engineering combined with regularization rather than from substantially increasing model nonlinearity and complexity.</span>
-<span id="cb10-574"><a href="#cb10-574" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-575"><a href="#cb10-575" aria-hidden="true" tabindex="-1"></a>Finally, the frozen LASSO model generalized well to Set B. Its held-out AUROC of 0.863 exceeded its Set A out-of-fold estimate of 0.847 and substantially exceeded both SAPS-I and SOFA on the same test cohort.</span>
-<span id="cb10-576"><a href="#cb10-576" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-577"><a href="#cb10-577" aria-hidden="true" tabindex="-1"></a><span class="fu"># Missingness and interpretation</span></span>
-<span id="cb10-578"><a href="#cb10-578" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-579"><a href="#cb10-579" aria-hidden="true" tabindex="-1"></a>Missingness in these ICU data should not necessarily be interpreted as random.</span>
-<span id="cb10-580"><a href="#cb10-580" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-581"><a href="#cb10-581" aria-hidden="true" tabindex="-1"></a>Whether a laboratory value or physiological measurement is collected may depend on clinicians&#39; assessment of the patient&#39;s condition. Consequently, explicit missingness indicators can carry predictive information about both patient state and the clinical measurement process.</span>
-<span id="cb10-582"><a href="#cb10-582" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-583"><a href="#cb10-583" aria-hidden="true" tabindex="-1"></a>For that reason, missingness indicators were included as predictors where appropriate. However, their predictive associations should not be interpreted causally. For example, an association between measurement of lactate and mortality would not imply that ordering a lactate test causes mortality. Measurement decisions may instead reflect underlying clinical concern or severity.</span>
-<span id="cb10-584"><a href="#cb10-584" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-585"><a href="#cb10-585" aria-hidden="true" tabindex="-1"></a>The same caution applies more broadly to other predictors in the model. The analysis was designed for prediction, not causal inference. LASSO coefficients describe conditional predictive associations under the fitted model and should not be interpreted as causal treatment or exposure effects.</span>
-<span id="cb10-586"><a href="#cb10-586" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-587"><a href="#cb10-587" aria-hidden="true" tabindex="-1"></a><span class="fu"># Limitations</span></span>
-<span id="cb10-588"><a href="#cb10-588" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-589"><a href="#cb10-589" aria-hidden="true" tabindex="-1"></a>Several limitations should be considered when interpreting the results.</span>
-<span id="cb10-590"><a href="#cb10-590" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-591"><a href="#cb10-591" aria-hidden="true" tabindex="-1"></a>First, the engineered features compress irregular longitudinal measurements into summary statistics and trends. Although this produces an interpretable and computationally manageable representation, it necessarily discards some temporal information.</span>
-<span id="cb10-592"><a href="#cb10-592" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-593"><a href="#cb10-593" aria-hidden="true" tabindex="-1"></a>Second, measurement frequency and missingness may reflect both patient physiology and clinical practice. Predictive performance may therefore depend partly on care patterns specific to the source population.</span>
-<span id="cb10-594"><a href="#cb10-594" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-595"><a href="#cb10-595" aria-hidden="true" tabindex="-1"></a>Third, the comparison of model classes was conducted within a single development cohort. Cross-validation estimates remain subject to sampling variability and model-selection optimism, even when nested cross-validation is used carefully.</span>
-<span id="cb10-596"><a href="#cb10-596" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-597"><a href="#cb10-597" aria-hidden="true" tabindex="-1"></a>Fourth, Set B provides an independent test of the frozen model within the same overall Challenge 2012 data source. It therefore provides evidence of held-out generalization but does not by itself establish transportability to different hospitals, time periods, or clinical populations.</span>
-<span id="cb10-598"><a href="#cb10-598" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-599"><a href="#cb10-599" aria-hidden="true" tabindex="-1"></a>Finally, the analysis evaluates predictive associations only. No predictor should be interpreted as having a causal effect on mortality from these analyses.</span>
-<span id="cb10-600"><a href="#cb10-600" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-601"><a href="#cb10-601" aria-hidden="true" tabindex="-1"></a><span class="fu"># Reproducibility</span></span>
-<span id="cb10-602"><a href="#cb10-602" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-603"><a href="#cb10-603" aria-hidden="true" tabindex="-1"></a>The analysis was organized as a sequence of scripts with distinct responsibilities:</span>
-<span id="cb10-604"><a href="#cb10-604" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-605"><a href="#cb10-605" aria-hidden="true" tabindex="-1"></a><span class="in">```text</span></span>
-<span id="cb10-606"><a href="#cb10-606" aria-hidden="true" tabindex="-1"></a><span class="in">R/05_build_features.R</span></span>
-<span id="cb10-607"><a href="#cb10-607" aria-hidden="true" tabindex="-1"></a><span class="in">    Construct 48-hour engineered features for Sets A and B.</span></span>
-<span id="cb10-608"><a href="#cb10-608" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-609"><a href="#cb10-609" aria-hidden="true" tabindex="-1"></a><span class="in">R/06_feature_audit.R</span></span>
-<span id="cb10-610"><a href="#cb10-610" aria-hidden="true" tabindex="-1"></a><span class="in">    Audit feature distributions, missingness, and structural consistency.</span></span>
-<span id="cb10-611"><a href="#cb10-611" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-612"><a href="#cb10-612" aria-hidden="true" tabindex="-1"></a><span class="in">R/07_define_resampling.R</span></span>
-<span id="cb10-613"><a href="#cb10-613" aria-hidden="true" tabindex="-1"></a><span class="in">    Define fixed stratified five-fold Set A cross-validation folds.</span></span>
-<span id="cb10-614"><a href="#cb10-614" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-615"><a href="#cb10-615" aria-hidden="true" tabindex="-1"></a><span class="in">R/08_logistic_baseline.R</span></span>
-<span id="cb10-616"><a href="#cb10-616" aria-hidden="true" tabindex="-1"></a><span class="in">    Evaluate SAPS-I, SOFA, and the compact logistic baseline.</span></span>
-<span id="cb10-617"><a href="#cb10-617" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-618"><a href="#cb10-618" aria-hidden="true" tabindex="-1"></a><span class="in">R/09_regularized_models.R</span></span>
-<span id="cb10-619"><a href="#cb10-619" aria-hidden="true" tabindex="-1"></a><span class="in">    Fit and tune Ridge, LASSO, and Elastic Net using nested cross-validation.</span></span>
-<span id="cb10-620"><a href="#cb10-620" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-621"><a href="#cb10-621" aria-hidden="true" tabindex="-1"></a><span class="in">R/10_tree_boosting_models.R</span></span>
-<span id="cb10-622"><a href="#cb10-622" aria-hidden="true" tabindex="-1"></a><span class="in">    Fit and tune Random Forest and Gradient Boosting models.</span></span>
-<span id="cb10-623"><a href="#cb10-623" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-624"><a href="#cb10-624" aria-hidden="true" tabindex="-1"></a><span class="in">R/10b_xgb_round_sensitivity.R</span></span>
-<span id="cb10-625"><a href="#cb10-625" aria-hidden="true" tabindex="-1"></a><span class="in">    Evaluate the prespecified XGBoost boosting-round sensitivity analysis.</span></span>
-<span id="cb10-626"><a href="#cb10-626" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-627"><a href="#cb10-627" aria-hidden="true" tabindex="-1"></a><span class="in">R/11_model_assessment.R</span></span>
-<span id="cb10-628"><a href="#cb10-628" aria-hidden="true" tabindex="-1"></a><span class="in">    Examine nonlinear logistic effects and summarize Set A model performance.</span></span>
-<span id="cb10-629"><a href="#cb10-629" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-630"><a href="#cb10-630" aria-hidden="true" tabindex="-1"></a><span class="in">R/12_test_set_evaluation.R</span></span>
-<span id="cb10-631"><a href="#cb10-631" aria-hidden="true" tabindex="-1"></a><span class="in">    Apply the frozen primary model once to held-out Set B.</span></span>
-<span id="cb10-632"><a href="#cb10-632" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb10-633"><a href="#cb10-633" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-634"><a href="#cb10-634" aria-hidden="true" tabindex="-1"></a>Software dependencies and versions are managed using Pixi. Random seeds and Set A fold assignments were fixed before model comparison so that candidate models were evaluated on the same outer validation partitions.</span>
-<span id="cb10-635"><a href="#cb10-635" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-636"><a href="#cb10-636" aria-hidden="true" tabindex="-1"></a><span class="fu"># Conclusion</span></span>
-<span id="cb10-637"><a href="#cb10-637" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-638"><a href="#cb10-638" aria-hidden="true" tabindex="-1"></a>Clinically motivated features constructed from the first 48 hours of ICU data substantially improved prediction of in-hospital mortality relative to the supplied SAPS-I and SOFA severity scores.</span>
-<span id="cb10-639"><a href="#cb10-639" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-640"><a href="#cb10-640" aria-hidden="true" tabindex="-1"></a>A compact logistic regression model achieved a Set A out-of-fold AUROC of 0.800, while adding prespecified spline nonlinearities did not improve performance. Expanding to the larger engineered feature set with regularization increased AUROC to approximately 0.845--0.847. Random forest did not improve on these models, while gradient boosting achieved only a marginal additional increase in discrimination.</span>
-<span id="cb10-641"><a href="#cb10-641" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-642"><a href="#cb10-642" aria-hidden="true" tabindex="-1"></a>LASSO was selected and frozen as the primary model before Set B was consulted because it provided strong discrimination with a sparse and comparatively interpretable model while avoiding the additional complexity of gradient boosting.</span>
-<span id="cb10-643"><a href="#cb10-643" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-644"><a href="#cb10-644" aria-hidden="true" tabindex="-1"></a>On the single-look held-out Set B evaluation, the frozen LASSO model achieved an AUROC of 0.863, Brier score of 0.088, and log loss of 0.290. On the same cohort, SAPS-I and SOFA achieved AUROCs of 0.660 and 0.657, respectively.</span>
-<span id="cb10-645"><a href="#cb10-645" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-646"><a href="#cb10-646" aria-hidden="true" tabindex="-1"></a>The results therefore support the value of combining clinically motivated 48-hour feature engineering with regularized logistic regression, while showing little evidence that substantially more complex nonlinear models provided a practically meaningful improvement in discrimination.</span>
+<span id="cb10-428"><a href="#cb10-428" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-429"><a href="#cb10-429" aria-hidden="true" tabindex="-1"></a><span class="fu"># Final model selection</span></span>
+<span id="cb10-430"><a href="#cb10-430" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-431"><a href="#cb10-431" aria-hidden="true" tabindex="-1"></a>The final model was selected before consulting Set B.</span>
+<span id="cb10-432"><a href="#cb10-432" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-433"><a href="#cb10-433" aria-hidden="true" tabindex="-1"></a>Although gradient boosting achieved the highest primary Set A AUROC, its advantage over LASSO was only approximately 0.002 AUROC units. LASSO achieved nearly identical discrimination, lower log loss, and a substantially simpler sparse representation. Given the small gain in discrimination from gradient boosting relative to its additional complexity, LASSO was frozen as the primary model before Set B was consulted.</span>
+<span id="cb10-434"><a href="#cb10-434" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-435"><a href="#cb10-435" aria-hidden="true" tabindex="-1"></a>The final Set A tuning step selected</span>
+<span id="cb10-436"><a href="#cb10-436" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-437"><a href="#cb10-437" aria-hidden="true" tabindex="-1"></a><span class="sc">\[</span></span>
+<span id="cb10-438"><a href="#cb10-438" aria-hidden="true" tabindex="-1"></a>\alpha = 1</span>
+<span id="cb10-439"><a href="#cb10-439" aria-hidden="true" tabindex="-1"></a><span class="sc">\]</span></span>
+<span id="cb10-440"><a href="#cb10-440" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-441"><a href="#cb10-441" aria-hidden="true" tabindex="-1"></a>and</span>
+<span id="cb10-442"><a href="#cb10-442" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-443"><a href="#cb10-443" aria-hidden="true" tabindex="-1"></a><span class="sc">\[</span></span>
+<span id="cb10-444"><a href="#cb10-444" aria-hidden="true" tabindex="-1"></a>\lambda = 0.00299.</span>
+<span id="cb10-445"><a href="#cb10-445" aria-hidden="true" tabindex="-1"></a><span class="sc">\]</span></span>
+<span id="cb10-446"><a href="#cb10-446" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-449"><a href="#cb10-449" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
+<span id="cb10-450"><a href="#cb10-450" aria-hidden="true" tabindex="-1"></a><span class="co">#| label: final-lasso-configuration</span></span>
+<span id="cb10-451"><a href="#cb10-451" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-452"><a href="#cb10-452" aria-hidden="true" tabindex="-1"></a>final_regularized_configuration <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(</span>
+<span id="cb10-453"><a href="#cb10-453" aria-hidden="true" tabindex="-1"></a>  <span class="fu">here</span>(</span>
+<span id="cb10-454"><a href="#cb10-454" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;output&quot;</span>,</span>
+<span id="cb10-455"><a href="#cb10-455" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;regularized_final_configuration_set_a.csv&quot;</span></span>
+<span id="cb10-456"><a href="#cb10-456" aria-hidden="true" tabindex="-1"></a>  ),</span>
+<span id="cb10-457"><a href="#cb10-457" aria-hidden="true" tabindex="-1"></a>  <span class="at">show_col_types =</span> <span class="cn">FALSE</span></span>
+<span id="cb10-458"><a href="#cb10-458" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb10-459"><a href="#cb10-459" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-460"><a href="#cb10-460" aria-hidden="true" tabindex="-1"></a>final_regularized_configuration <span class="sc">|&gt;</span></span>
+<span id="cb10-461"><a href="#cb10-461" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(</span>
+<span id="cb10-462"><a href="#cb10-462" aria-hidden="true" tabindex="-1"></a>    model <span class="sc">==</span> <span class="st">&quot;LASSO&quot;</span></span>
+<span id="cb10-463"><a href="#cb10-463" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">|&gt;</span></span>
+<span id="cb10-464"><a href="#cb10-464" aria-hidden="true" tabindex="-1"></a>  <span class="fu">transmute</span>(</span>
+<span id="cb10-465"><a href="#cb10-465" aria-hidden="true" tabindex="-1"></a>    <span class="at">Model =</span> model,</span>
+<span id="cb10-466"><a href="#cb10-466" aria-hidden="true" tabindex="-1"></a>    <span class="at">Alpha =</span> alpha,</span>
+<span id="cb10-467"><a href="#cb10-467" aria-hidden="true" tabindex="-1"></a>    <span class="at">Lambda =</span> <span class="fu">sprintf</span>(<span class="st">&quot;%.6f&quot;</span>, lambda),</span>
+<span id="cb10-468"><a href="#cb10-468" aria-hidden="true" tabindex="-1"></a>    <span class="st">`</span><span class="at">Internal CV AUROC</span><span class="st">`</span> <span class="ot">=</span> <span class="fu">sprintf</span>(</span>
+<span id="cb10-469"><a href="#cb10-469" aria-hidden="true" tabindex="-1"></a>      <span class="st">&quot;%.3f&quot;</span>,</span>
+<span id="cb10-470"><a href="#cb10-470" aria-hidden="true" tabindex="-1"></a>      mean_auc</span>
+<span id="cb10-471"><a href="#cb10-471" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb10-472"><a href="#cb10-472" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">|&gt;</span></span>
+<span id="cb10-473"><a href="#cb10-473" aria-hidden="true" tabindex="-1"></a>  <span class="fu">kable</span>(</span>
+<span id="cb10-474"><a href="#cb10-474" aria-hidden="true" tabindex="-1"></a>    <span class="at">caption =</span> <span class="st">&quot;Frozen final LASSO configuration selected using Set A only.&quot;</span></span>
+<span id="cb10-475"><a href="#cb10-475" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb10-476"><a href="#cb10-476" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb10-477"><a href="#cb10-477" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-478"><a href="#cb10-478" aria-hidden="true" tabindex="-1"></a>After this model specification was frozen, no feature, preprocessing, model-class, or hyperparameter changes were made in response to Set B.</span>
+<span id="cb10-479"><a href="#cb10-479" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-480"><a href="#cb10-480" aria-hidden="true" tabindex="-1"></a><span class="fu"># Single-look held-out Set B evaluation</span></span>
+<span id="cb10-481"><a href="#cb10-481" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-482"><a href="#cb10-482" aria-hidden="true" tabindex="-1"></a>The frozen LASSO preprocessing pipeline was refit using all of Set A and then applied unchanged to Set B. Set B outcomes were consulted only after the predictions had been generated.</span>
+<span id="cb10-483"><a href="#cb10-483" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-486"><a href="#cb10-486" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
+<span id="cb10-487"><a href="#cb10-487" aria-hidden="true" tabindex="-1"></a><span class="co">#| label: set-b-performance</span></span>
+<span id="cb10-488"><a href="#cb10-488" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-489"><a href="#cb10-489" aria-hidden="true" tabindex="-1"></a>set_b_performance <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(</span>
+<span id="cb10-490"><a href="#cb10-490" aria-hidden="true" tabindex="-1"></a>  <span class="fu">here</span>(</span>
+<span id="cb10-491"><a href="#cb10-491" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;output&quot;</span>,</span>
+<span id="cb10-492"><a href="#cb10-492" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;set-b_test_performance.csv&quot;</span></span>
+<span id="cb10-493"><a href="#cb10-493" aria-hidden="true" tabindex="-1"></a>  ),</span>
+<span id="cb10-494"><a href="#cb10-494" aria-hidden="true" tabindex="-1"></a>  <span class="at">show_col_types =</span> <span class="cn">FALSE</span></span>
+<span id="cb10-495"><a href="#cb10-495" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb10-496"><a href="#cb10-496" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-497"><a href="#cb10-497" aria-hidden="true" tabindex="-1"></a>set_b_performance <span class="sc">|&gt;</span></span>
+<span id="cb10-498"><a href="#cb10-498" aria-hidden="true" tabindex="-1"></a>  <span class="fu">transmute</span>(</span>
+<span id="cb10-499"><a href="#cb10-499" aria-hidden="true" tabindex="-1"></a>    <span class="at">Model =</span> model,</span>
+<span id="cb10-500"><a href="#cb10-500" aria-hidden="true" tabindex="-1"></a>    <span class="at">N =</span> n,</span>
+<span id="cb10-501"><a href="#cb10-501" aria-hidden="true" tabindex="-1"></a>    <span class="at">Deaths =</span> deaths,</span>
+<span id="cb10-502"><a href="#cb10-502" aria-hidden="true" tabindex="-1"></a>    <span class="at">Mortality =</span> <span class="fu">sprintf</span>(</span>
+<span id="cb10-503"><a href="#cb10-503" aria-hidden="true" tabindex="-1"></a>      <span class="st">&quot;%.1f%%&quot;</span>,</span>
+<span id="cb10-504"><a href="#cb10-504" aria-hidden="true" tabindex="-1"></a>      <span class="dv">100</span> <span class="sc">*</span> mortality</span>
+<span id="cb10-505"><a href="#cb10-505" aria-hidden="true" tabindex="-1"></a>    ),</span>
+<span id="cb10-506"><a href="#cb10-506" aria-hidden="true" tabindex="-1"></a>    <span class="at">AUROC =</span> <span class="fu">sprintf</span>(<span class="st">&quot;%.3f&quot;</span>, auc),</span>
+<span id="cb10-507"><a href="#cb10-507" aria-hidden="true" tabindex="-1"></a>    <span class="at">Brier =</span> <span class="fu">sprintf</span>(<span class="st">&quot;%.3f&quot;</span>, brier),</span>
+<span id="cb10-508"><a href="#cb10-508" aria-hidden="true" tabindex="-1"></a>    <span class="st">`</span><span class="at">Log loss</span><span class="st">`</span> <span class="ot">=</span> <span class="fu">sprintf</span>(<span class="st">&quot;%.3f&quot;</span>, log_loss)</span>
+<span id="cb10-509"><a href="#cb10-509" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">|&gt;</span></span>
+<span id="cb10-510"><a href="#cb10-510" aria-hidden="true" tabindex="-1"></a>  <span class="fu">kable</span>(</span>
+<span id="cb10-511"><a href="#cb10-511" aria-hidden="true" tabindex="-1"></a>    <span class="at">caption =</span> <span class="st">&quot;Single-look held-out performance in Set B.&quot;</span></span>
+<span id="cb10-512"><a href="#cb10-512" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb10-513"><a href="#cb10-513" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb10-514"><a href="#cb10-514" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-515"><a href="#cb10-515" aria-hidden="true" tabindex="-1"></a>The frozen LASSO model achieved</span>
+<span id="cb10-516"><a href="#cb10-516" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-517"><a href="#cb10-517" aria-hidden="true" tabindex="-1"></a><span class="sc">\[</span></span>
+<span id="cb10-518"><a href="#cb10-518" aria-hidden="true" tabindex="-1"></a>\boxed{\mathrm{AUROC}=0.863}</span>
+<span id="cb10-519"><a href="#cb10-519" aria-hidden="true" tabindex="-1"></a><span class="sc">\]</span></span>
+<span id="cb10-520"><a href="#cb10-520" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-521"><a href="#cb10-521" aria-hidden="true" tabindex="-1"></a>on Set B, compared with 0.660 for SAPS-I and 0.657 for SOFA.</span>
+<span id="cb10-522"><a href="#cb10-522" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-523"><a href="#cb10-523" aria-hidden="true" tabindex="-1"></a>LASSO also achieved a Brier score of 0.088 and log loss of 0.290, compared with approximately 0.116--0.117 and 0.387--0.390, respectively, for the clinical benchmarks.</span>
+<span id="cb10-524"><a href="#cb10-524" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-525"><a href="#cb10-525" aria-hidden="true" tabindex="-1"></a>Thus, the improvement observed during Set A development generalized to the independent Set B cohort.</span>
+<span id="cb10-526"><a href="#cb10-526" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-527"><a href="#cb10-527" aria-hidden="true" tabindex="-1"></a><span class="fu"># Development-to-test comparison</span></span>
+<span id="cb10-528"><a href="#cb10-528" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-531"><a href="#cb10-531" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
+<span id="cb10-532"><a href="#cb10-532" aria-hidden="true" tabindex="-1"></a><span class="co">#| label: set-a-vs-set-b</span></span>
+<span id="cb10-533"><a href="#cb10-533" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-534"><a href="#cb10-534" aria-hidden="true" tabindex="-1"></a>lasso_a_b <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(</span>
+<span id="cb10-535"><a href="#cb10-535" aria-hidden="true" tabindex="-1"></a>  <span class="fu">here</span>(</span>
+<span id="cb10-536"><a href="#cb10-536" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;output&quot;</span>,</span>
+<span id="cb10-537"><a href="#cb10-537" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;lasso_set_a_vs_set_b.csv&quot;</span></span>
+<span id="cb10-538"><a href="#cb10-538" aria-hidden="true" tabindex="-1"></a>  ),</span>
+<span id="cb10-539"><a href="#cb10-539" aria-hidden="true" tabindex="-1"></a>  <span class="at">show_col_types =</span> <span class="cn">FALSE</span></span>
+<span id="cb10-540"><a href="#cb10-540" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb10-541"><a href="#cb10-541" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-542"><a href="#cb10-542" aria-hidden="true" tabindex="-1"></a>lasso_a_b <span class="sc">|&gt;</span></span>
+<span id="cb10-543"><a href="#cb10-543" aria-hidden="true" tabindex="-1"></a>  <span class="fu">transmute</span>(</span>
+<span id="cb10-544"><a href="#cb10-544" aria-hidden="true" tabindex="-1"></a>    <span class="at">Dataset =</span> dataset,</span>
+<span id="cb10-545"><a href="#cb10-545" aria-hidden="true" tabindex="-1"></a>    <span class="at">AUROC =</span> <span class="fu">sprintf</span>(<span class="st">&quot;%.3f&quot;</span>, auc),</span>
+<span id="cb10-546"><a href="#cb10-546" aria-hidden="true" tabindex="-1"></a>    <span class="at">Brier =</span> <span class="fu">sprintf</span>(<span class="st">&quot;%.3f&quot;</span>, brier),</span>
+<span id="cb10-547"><a href="#cb10-547" aria-hidden="true" tabindex="-1"></a>    <span class="st">`</span><span class="at">Log loss</span><span class="st">`</span> <span class="ot">=</span> <span class="fu">sprintf</span>(<span class="st">&quot;%.3f&quot;</span>, log_loss)</span>
+<span id="cb10-548"><a href="#cb10-548" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">|&gt;</span></span>
+<span id="cb10-549"><a href="#cb10-549" aria-hidden="true" tabindex="-1"></a>  <span class="fu">kable</span>(</span>
+<span id="cb10-550"><a href="#cb10-550" aria-hidden="true" tabindex="-1"></a>    <span class="at">caption =</span> <span class="st">&quot;Frozen LASSO performance in Set A development and Set B held-out evaluation.&quot;</span></span>
+<span id="cb10-551"><a href="#cb10-551" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb10-552"><a href="#cb10-552" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb10-553"><a href="#cb10-553" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-554"><a href="#cb10-554" aria-hidden="true" tabindex="-1"></a>LASSO improved from an out-of-fold Set A AUROC of 0.847 to a Set B AUROC of 0.863. Its Brier score decreased from 0.092 to 0.088 and log loss decreased from 0.302 to 0.290.</span>
+<span id="cb10-555"><a href="#cb10-555" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-556"><a href="#cb10-556" aria-hidden="true" tabindex="-1"></a>The independent test performance therefore showed no evidence of a substantial generalization loss.</span>
+<span id="cb10-557"><a href="#cb10-557" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-558"><a href="#cb10-558" aria-hidden="true" tabindex="-1"></a>The Set B result was not used to guide any subsequent changes to the feature set, preprocessing pipeline, model class, or hyperparameters.</span>
+<span id="cb10-559"><a href="#cb10-559" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-560"><a href="#cb10-560" aria-hidden="true" tabindex="-1"></a><span class="fu"># Interpretation</span></span>
+<span id="cb10-561"><a href="#cb10-561" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-562"><a href="#cb10-562" aria-hidden="true" tabindex="-1"></a>Several findings emerged from the model comparison.</span>
+<span id="cb10-563"><a href="#cb10-563" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-564"><a href="#cb10-564" aria-hidden="true" tabindex="-1"></a>First, clinically motivated feature engineering substantially improved mortality prediction relative to the supplied severity-score benchmarks. The compact logistic regression model increased Set A AUROC from 0.637 for SAPS-I and 0.625 for SOFA to 0.800.</span>
+<span id="cb10-565"><a href="#cb10-565" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-566"><a href="#cb10-566" aria-hidden="true" tabindex="-1"></a>Second, explicitly modeling selected continuous predictors with natural cubic splines did not improve predictive performance. The nonlinear logistic model achieved an AUROC of 0.799, essentially identical to and slightly below the linear logistic baseline. Thus, within the nonlinear specification examined here, additional spline flexibility was not useful.</span>
+<span id="cb10-567"><a href="#cb10-567" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-568"><a href="#cb10-568" aria-hidden="true" tabindex="-1"></a>Third, regularization provided a substantial additional improvement. Ridge, elastic net, and LASSO all achieved Set A AUROCs near 0.85. This suggests that the richer engineered feature representation contained useful predictive information, but that controlling model complexity was important when using the larger feature space.</span>
+<span id="cb10-569"><a href="#cb10-569" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-570"><a href="#cb10-570" aria-hidden="true" tabindex="-1"></a>Fourth, more flexible tree-based models did not uniformly improve performance. Random forest performed slightly worse than the regularized logistic models. Gradient boosting produced the highest primary Set A AUROC, but its improvement over LASSO was only approximately 0.002 AUROC units.</span>
+<span id="cb10-571"><a href="#cb10-571" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-572"><a href="#cb10-572" aria-hidden="true" tabindex="-1"></a>Taken together, these results suggest that most of the predictive gain was obtained from clinically motivated feature engineering combined with regularization rather than from substantially increasing model nonlinearity and complexity.</span>
+<span id="cb10-573"><a href="#cb10-573" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-574"><a href="#cb10-574" aria-hidden="true" tabindex="-1"></a>Finally, the frozen LASSO model generalized well to Set B. Its held-out AUROC of 0.863 exceeded its Set A out-of-fold estimate of 0.847 and substantially exceeded both SAPS-I and SOFA on the same test cohort.</span>
+<span id="cb10-575"><a href="#cb10-575" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-576"><a href="#cb10-576" aria-hidden="true" tabindex="-1"></a><span class="fu"># Missingness and interpretation</span></span>
+<span id="cb10-577"><a href="#cb10-577" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-578"><a href="#cb10-578" aria-hidden="true" tabindex="-1"></a>Missingness in these ICU data should not necessarily be interpreted as random.</span>
+<span id="cb10-579"><a href="#cb10-579" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-580"><a href="#cb10-580" aria-hidden="true" tabindex="-1"></a>Whether a laboratory value or physiological measurement is collected may depend on clinicians&#39; assessment of the patient&#39;s condition. Consequently, explicit missingness indicators can carry predictive information about both patient state and the clinical measurement process.</span>
+<span id="cb10-581"><a href="#cb10-581" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-582"><a href="#cb10-582" aria-hidden="true" tabindex="-1"></a>For that reason, missingness indicators were included as predictors where appropriate. However, their predictive associations should not be interpreted causally. For example, an association between measurement of lactate and mortality would not imply that ordering a lactate test causes mortality. Measurement decisions may instead reflect underlying clinical concern or severity.</span>
+<span id="cb10-583"><a href="#cb10-583" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-584"><a href="#cb10-584" aria-hidden="true" tabindex="-1"></a>The same caution applies more broadly to other predictors in the model. The analysis was designed for prediction, not causal inference. LASSO coefficients describe conditional predictive associations under the fitted model and should not be interpreted as causal treatment or exposure effects.</span>
+<span id="cb10-585"><a href="#cb10-585" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-586"><a href="#cb10-586" aria-hidden="true" tabindex="-1"></a><span class="fu"># Limitations</span></span>
+<span id="cb10-587"><a href="#cb10-587" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-588"><a href="#cb10-588" aria-hidden="true" tabindex="-1"></a>Several limitations should be considered when interpreting the results.</span>
+<span id="cb10-589"><a href="#cb10-589" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-590"><a href="#cb10-590" aria-hidden="true" tabindex="-1"></a>First, the engineered features compress irregular longitudinal measurements into summary statistics and trends. Although this produces an interpretable and computationally manageable representation, it necessarily discards some temporal information.</span>
+<span id="cb10-591"><a href="#cb10-591" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-592"><a href="#cb10-592" aria-hidden="true" tabindex="-1"></a>Second, measurement frequency and missingness may reflect both patient physiology and clinical practice. Predictive performance may therefore depend partly on care patterns specific to the source population.</span>
+<span id="cb10-593"><a href="#cb10-593" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-594"><a href="#cb10-594" aria-hidden="true" tabindex="-1"></a>Third, the comparison of model classes was conducted within a single development cohort. Cross-validation estimates remain subject to sampling variability and model-selection optimism, even when nested cross-validation is used carefully.</span>
+<span id="cb10-595"><a href="#cb10-595" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-596"><a href="#cb10-596" aria-hidden="true" tabindex="-1"></a>Fourth, Set B provides an independent test of the frozen model within the same overall Challenge 2012 data source. It therefore provides evidence of held-out generalization but does not by itself establish transportability to different hospitals, time periods, or clinical populations.</span>
+<span id="cb10-597"><a href="#cb10-597" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-598"><a href="#cb10-598" aria-hidden="true" tabindex="-1"></a>Finally, the analysis evaluates predictive associations only. No predictor should be interpreted as having a causal effect on mortality from these analyses.</span>
+<span id="cb10-599"><a href="#cb10-599" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-600"><a href="#cb10-600" aria-hidden="true" tabindex="-1"></a><span class="fu"># Reproducibility</span></span>
+<span id="cb10-601"><a href="#cb10-601" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-602"><a href="#cb10-602" aria-hidden="true" tabindex="-1"></a>The analysis was organized as a sequence of scripts with distinct responsibilities:</span>
+<span id="cb10-603"><a href="#cb10-603" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-604"><a href="#cb10-604" aria-hidden="true" tabindex="-1"></a><span class="in">```text</span></span>
+<span id="cb10-605"><a href="#cb10-605" aria-hidden="true" tabindex="-1"></a><span class="in">R/05_build_features.R</span></span>
+<span id="cb10-606"><a href="#cb10-606" aria-hidden="true" tabindex="-1"></a><span class="in">    Construct 48-hour engineered features for Sets A and B.</span></span>
+<span id="cb10-607"><a href="#cb10-607" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-608"><a href="#cb10-608" aria-hidden="true" tabindex="-1"></a><span class="in">R/06_feature_audit.R</span></span>
+<span id="cb10-609"><a href="#cb10-609" aria-hidden="true" tabindex="-1"></a><span class="in">    Audit feature distributions, missingness, and structural consistency.</span></span>
+<span id="cb10-610"><a href="#cb10-610" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-611"><a href="#cb10-611" aria-hidden="true" tabindex="-1"></a><span class="in">R/07_define_resampling.R</span></span>
+<span id="cb10-612"><a href="#cb10-612" aria-hidden="true" tabindex="-1"></a><span class="in">    Define fixed stratified five-fold Set A cross-validation folds.</span></span>
+<span id="cb10-613"><a href="#cb10-613" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-614"><a href="#cb10-614" aria-hidden="true" tabindex="-1"></a><span class="in">R/08_logistic_baseline.R</span></span>
+<span id="cb10-615"><a href="#cb10-615" aria-hidden="true" tabindex="-1"></a><span class="in">    Evaluate SAPS-I, SOFA, and the compact logistic baseline.</span></span>
+<span id="cb10-616"><a href="#cb10-616" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-617"><a href="#cb10-617" aria-hidden="true" tabindex="-1"></a><span class="in">R/09_regularized_models.R</span></span>
+<span id="cb10-618"><a href="#cb10-618" aria-hidden="true" tabindex="-1"></a><span class="in">    Fit and tune Ridge, LASSO, and Elastic Net using nested cross-validation.</span></span>
+<span id="cb10-619"><a href="#cb10-619" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-620"><a href="#cb10-620" aria-hidden="true" tabindex="-1"></a><span class="in">R/10_tree_boosting_models.R</span></span>
+<span id="cb10-621"><a href="#cb10-621" aria-hidden="true" tabindex="-1"></a><span class="in">    Fit and tune Random Forest and Gradient Boosting models.</span></span>
+<span id="cb10-622"><a href="#cb10-622" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-623"><a href="#cb10-623" aria-hidden="true" tabindex="-1"></a><span class="in">R/10b_xgb_round_sensitivity.R</span></span>
+<span id="cb10-624"><a href="#cb10-624" aria-hidden="true" tabindex="-1"></a><span class="in">    Evaluate a one-time XGBoost boosting-round boundary sensitivity analysis.</span></span>
+<span id="cb10-625"><a href="#cb10-625" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-626"><a href="#cb10-626" aria-hidden="true" tabindex="-1"></a><span class="in">R/11_model_assessment.R</span></span>
+<span id="cb10-627"><a href="#cb10-627" aria-hidden="true" tabindex="-1"></a><span class="in">    Examine nonlinear logistic effects and summarize Set A model performance.</span></span>
+<span id="cb10-628"><a href="#cb10-628" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-629"><a href="#cb10-629" aria-hidden="true" tabindex="-1"></a><span class="in">R/12_test_set_evaluation.R</span></span>
+<span id="cb10-630"><a href="#cb10-630" aria-hidden="true" tabindex="-1"></a><span class="in">    Apply the frozen primary model once to held-out Set B.</span></span>
+<span id="cb10-631"><a href="#cb10-631" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb10-632"><a href="#cb10-632" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-633"><a href="#cb10-633" aria-hidden="true" tabindex="-1"></a>Software dependencies and versions are managed using Pixi. Random seeds and Set A fold assignments were fixed before model comparison so that candidate models were evaluated on the same outer validation partitions.</span>
+<span id="cb10-634"><a href="#cb10-634" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-635"><a href="#cb10-635" aria-hidden="true" tabindex="-1"></a><span class="fu"># Conclusion</span></span>
+<span id="cb10-636"><a href="#cb10-636" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-637"><a href="#cb10-637" aria-hidden="true" tabindex="-1"></a>Clinically motivated features constructed from the first 48 hours of ICU data substantially improved prediction of in-hospital mortality relative to the supplied SAPS-I and SOFA severity scores.</span>
+<span id="cb10-638"><a href="#cb10-638" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-639"><a href="#cb10-639" aria-hidden="true" tabindex="-1"></a>A compact logistic regression model achieved a Set A out-of-fold AUROC of 0.800, while adding prespecified spline nonlinearities did not improve performance. Expanding to the larger engineered feature set with regularization increased AUROC to approximately 0.845--0.847. Random forest did not improve on these models, while gradient boosting achieved only a small additional increase in discrimination on Set A.</span>
+<span id="cb10-640"><a href="#cb10-640" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-641"><a href="#cb10-641" aria-hidden="true" tabindex="-1"></a>LASSO was selected and frozen as the primary model before Set B was consulted because it provided nearly the same discrimination as gradient boosting, lower log loss, and a sparse, comparatively interpretable representation without the additional complexity of boosting.</span>
+<span id="cb10-642"><a href="#cb10-642" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-643"><a href="#cb10-643" aria-hidden="true" tabindex="-1"></a>On the single-look held-out Set B evaluation, the frozen LASSO model achieved an AUROC of 0.863, Brier score of 0.088, and log loss of 0.290. On the same cohort, SAPS-I and SOFA achieved AUROCs of 0.660 and 0.657, respectively.</span>
+<span id="cb10-644"><a href="#cb10-644" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-645"><a href="#cb10-645" aria-hidden="true" tabindex="-1"></a>The results therefore support the value of combining clinically motivated 48-hour feature engineering with regularized logistic regression. Within Set A, substantially more complex nonlinear models provided only a small additional improvement in discrimination beyond the regularized logistic models.</span>
 </code></pre></div><button title="Copy to Clipboard" class="code-copy-button" data-in-quarto-modal><i class="bi"></i></button></div>
 </div></div></div></div></div>
 </div> <!-- /content -->

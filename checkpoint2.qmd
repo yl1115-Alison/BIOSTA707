@@ -132,7 +132,7 @@ Set A contained 554 in-hospital deaths (13.9%), while Set B contained 568 deaths
 
 The raw Challenge 2012 records contain irregularly sampled vital signs and laboratory measurements during the first 48 hours. A single measurement does not fully describe either a patient's physiological state or its evolution over time. I therefore represented each ICU stay using several complementary feature families.
 
-The feature construction step produced 313 candidate predictors before training-fold feature filtering.
+The feature construction step produced 313 candidate predictors before training-fold feature filtering, including 37 explicit missingness indicators, 32 slope features, and 23 first-to-last change features. Together, these features represented physiological level, within-window trajectory, measurement frequency, and measurement availability.
 
 ## Summary features
 
@@ -369,7 +369,7 @@ The compact logistic baseline substantially improved discrimination, reaching an
 
 Adding the prespecified nonlinear spline terms did not improve performance. The nonlinear logistic model had an AUROC of 0.799 compared with 0.800 for the linear logistic baseline, with similarly slightly worse Brier score and log loss. Thus, the examined nonlinear specification did not provide meaningful predictive benefit.
 
-Regularization produced the largest improvement over the conventional logistic baseline. Ridge, elastic net, and LASSO achieved AUROCs of approximately 0.845--0.847. LASSO had the highest AUROC among the regularized models at 0.847 and also had the lowest log loss of the candidate primary models.
+Regularization produced the largest improvement over the conventional logistic baseline. Ridge, elastic net, and LASSO achieved AUROCs of approximately 0.845--0.847. LASSO had the highest AUROC among the regularized models (0.847) and the lowest log loss among the primary machine-learning models evaluated on Set A.
 
 Random forest achieved an AUROC of 0.839 and therefore did not improve on the regularized logistic models.
 
@@ -384,7 +384,7 @@ Thus, increasing model complexity from sparse regularized logistic regression to
 
 # Gradient-boosting sensitivity analysis
 
-The primary XGBoost configurations reached the prespecified maximum of 400 boosting rounds. I therefore performed one sensitivity analysis in which the structural hyperparameter grid was held fixed but the maximum training horizon was increased to 1,000 rounds.
+The primary XGBoost configurations reached the prespecified maximum of 400 boosting rounds. After observing this boundary behavior, I performed a one-time sensitivity analysis in which the structural hyperparameter grid was held fixed but the maximum training horizon was increased to 1,000 rounds. This was treated as a secondary diagnostic analysis rather than as an additional primary model-search stage.
 
 ```{r}
 #| label: xgb-sensitivity
@@ -413,13 +413,12 @@ Extending the boosting horizon increased AUROC from 0.849 to 0.855, but probabil
 
 All selected inner fits still reached the 1,000-round boundary. Rather than continuing an open-ended search after observing Set A results, I stopped model development at this point and retained the original boosting analysis as the primary XGBoost comparison.
 
+
 # Final model selection
 
 The final model was selected before consulting Set B.
 
-Although gradient boosting achieved the highest primary Set A AUROC, its advantage over LASSO was only approximately 0.002 AUROC units. LASSO provided nearly identical discrimination with a substantially simpler sparse model and strong probability performance.
-
-LASSO was therefore frozen as the primary model.
+Although gradient boosting achieved the highest primary Set A AUROC, its advantage over LASSO was only approximately 0.002 AUROC units. LASSO achieved nearly identical discrimination, lower log loss, and a substantially simpler sparse representation. Given the small gain in discrimination from gradient boosting relative to its additional complexity, LASSO was frozen as the primary model before Set B was consulted.
 
 The final Set A tuning step selected
 
@@ -604,7 +603,7 @@ R/10_tree_boosting_models.R
     Fit and tune Random Forest and Gradient Boosting models.
 
 R/10b_xgb_round_sensitivity.R
-    Evaluate the prespecified XGBoost boosting-round sensitivity analysis.
+    Evaluate a one-time XGBoost boosting-round boundary sensitivity analysis.
 
 R/11_model_assessment.R
     Examine nonlinear logistic effects and summarize Set A model performance.
@@ -619,10 +618,10 @@ Software dependencies and versions are managed using Pixi. Random seeds and Set 
 
 Clinically motivated features constructed from the first 48 hours of ICU data substantially improved prediction of in-hospital mortality relative to the supplied SAPS-I and SOFA severity scores.
 
-A compact logistic regression model achieved a Set A out-of-fold AUROC of 0.800, while adding prespecified spline nonlinearities did not improve performance. Expanding to the larger engineered feature set with regularization increased AUROC to approximately 0.845--0.847. Random forest did not improve on these models, while gradient boosting achieved only a marginal additional increase in discrimination.
+A compact logistic regression model achieved a Set A out-of-fold AUROC of 0.800, while adding prespecified spline nonlinearities did not improve performance. Expanding to the larger engineered feature set with regularization increased AUROC to approximately 0.845--0.847. Random forest did not improve on these models, while gradient boosting achieved only a small additional increase in discrimination on Set A.
 
-LASSO was selected and frozen as the primary model before Set B was consulted because it provided strong discrimination with a sparse and comparatively interpretable model while avoiding the additional complexity of gradient boosting.
+LASSO was selected and frozen as the primary model before Set B was consulted because it provided nearly the same discrimination as gradient boosting, lower log loss, and a sparse, comparatively interpretable representation without the additional complexity of boosting.
 
 On the single-look held-out Set B evaluation, the frozen LASSO model achieved an AUROC of 0.863, Brier score of 0.088, and log loss of 0.290. On the same cohort, SAPS-I and SOFA achieved AUROCs of 0.660 and 0.657, respectively.
 
-The results therefore support the value of combining clinically motivated 48-hour feature engineering with regularized logistic regression, while showing little evidence that substantially more complex nonlinear models provided a practically meaningful improvement in discrimination.
+The results therefore support the value of combining clinically motivated 48-hour feature engineering with regularized logistic regression. Within Set A, substantially more complex nonlinear models provided only a small additional improvement in discrimination beyond the regularized logistic models.
